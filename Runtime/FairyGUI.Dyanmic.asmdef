@@ -1,0 +1,16 @@
+{
+    "name": "FairyGUI.Dyanmic",
+    "rootNamespace": "FairyGUI.Dyanmic",
+    "references": [
+        "GUID:af39456e6a3b4994f8bcbb4298527011"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

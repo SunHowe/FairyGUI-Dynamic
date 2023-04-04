@@ -1,0 +1,15 @@
+{
+    "name": "com.howegame.fariygui.dynamic",
+    "version": "1.0.0",
+    "displayName": "FairyGUI-Dynamic",
+    "description": "Unity package for FairyGUI-Dynamic. It provides a manager of FairyGUI UIPackage.",
+    "category": "Runtime",
+    "keywords": [
+      "FairyGUI"
+    ],
+    "author": {
+      "name": "SunHowe",
+      "email": "tosunhowe@gmail.com",
+      "url": "https://github.com/SunHowe/FairyGUI-Dynamic.git"
+    }
+  }
