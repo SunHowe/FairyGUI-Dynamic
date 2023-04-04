@@ -1,6 +1,6 @@
 {
     "name": "FairyGUI.Dyanmic",
-    "rootNamespace": "FairyGUI.Dyanmic",
+    "rootNamespace": "FairyGUI.Dynamic",
     "references": [
         "GUID:af39456e6a3b4994f8bcbb4298527011"
     ],
