@@ -31,6 +31,15 @@ namespace FairyGUI.Dynamic
 
         public void Dispose()
         {
+            UnloadAllUIPackages();
+            m_Buffer.Clear();
+            m_Buffer2.Clear();
+            m_Version = 0;
+            m_NTexture2PackageNames.Clear();
+            m_NAudioClip2PackageNames.Clear();
+            m_DictUIPackageInfos.Clear();
+            m_PoolUIPackageInfos.Clear();
+            
 #if UNITY_EDITOR
             Debugger.DestroyDebugger();
 #endif

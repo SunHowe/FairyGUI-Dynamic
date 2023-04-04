@@ -93,10 +93,10 @@ namespace FairyGUI.Dynamic
                 {
                     if (!dependency.TryGetValue("name", out var name))
                         continue;
-                    
+
                     if (string.IsNullOrEmpty(name))
                         continue;
-                    
+
                     if (string.Equals(name, PackageName))
                         continue;
 
@@ -138,7 +138,7 @@ namespace FairyGUI.Dynamic
 
             if (addRef)
                 info.AddRef();
-            
+
             info.AddCallback(callback);
         }
 
@@ -163,7 +163,8 @@ namespace FairyGUI.Dynamic
                 foreach (var dependencePackageName in info.DependencePackageNames)
                     ReleaseUIPackage(dependencePackageName);
 
-                UIPackage.RemovePackage(info.PackageName);
+                if (UIPackage.GetByName(info.PackageName) != null)
+                    UIPackage.RemovePackage(info.PackageName);
             }
             else
             {
