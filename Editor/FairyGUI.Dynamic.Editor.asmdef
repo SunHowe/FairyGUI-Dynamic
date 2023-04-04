@@ -1,0 +1,16 @@
+{
+    "name": "FairyGUI.Dynamic.Editor",
+    "rootNamespace": "FairyGUI.Dynamic.Editor",
+    "references": [
+        "GUID:853ef8faf8a4268478503c4b87fdb23f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
