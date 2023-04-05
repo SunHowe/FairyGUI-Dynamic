@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace FairyGUI.Dynamic
 {
     public partial class UIAssetManager
     {
-        #region [Package Info]
-
         public sealed class UIPackageInfo
         {
             /// <summary>
@@ -33,7 +30,7 @@ namespace FairyGUI.Dynamic
             /// <summary>
             /// 是否存在引用
             /// </summary>
-            public bool IsAnyReference => ReferenceCount > 0;
+            public bool IsAnyReference => ReferenceCount > 0 || BeDependentPackageRefInfos.Count > 0;
 
             /// <summary>
             /// 引用数量
@@ -41,12 +38,17 @@ namespace FairyGUI.Dynamic
             public int ReferenceCount { get; private set; }
 
             /// <summary>
-            /// 依赖的包名
+            /// 依赖的UIPackage关联数据
             /// </summary>
-            public IEnumerable<string> DependencePackageNames => m_DependencePackageNames;
+            public List<UIPackageRefInfo> DependencePackageRefInfos { get; } = new List<UIPackageRefInfo>();
 
             /// <summary>
-            /// 添加引用
+            /// 被依赖的UIPackage关联数据
+            /// </summary>
+            public List<UIPackageRefInfo> BeDependentPackageRefInfos { get; } = new List<UIPackageRefInfo>();
+
+            /// <summary>
+            /// 添加引用计数
             /// </summary>
             public void AddRef()
             {
@@ -54,7 +56,7 @@ namespace FairyGUI.Dynamic
             }
 
             /// <summary>
-            /// 移除引用
+            /// 移除引用计数
             /// </summary>
             public void RemoveRef()
             {
@@ -76,34 +78,20 @@ namespace FairyGUI.Dynamic
             }
 
             /// <summary>
+            /// 触发回调
+            /// </summary>
+            public void InvokeCallbacks(UIPackage package)
+            {
+                while (m_QueueCallbacks.Count > 0)
+                    m_QueueCallbacks.Dequeue().Invoke(package);
+            }
+
+            /// <summary>
             /// 设置UIPackage
             /// </summary>
             public void SetUIPackage(UIPackage package)
             {
-                if (UIPackage != null)
-                    throw new Exception("重复设置UIPackage");
-
                 UIPackage = package;
-
-                while (m_QueueCallbacks.Count > 0)
-                    m_QueueCallbacks.Dequeue().Invoke(UIPackage);
-
-                if (UIPackage == null)
-                    return;
-
-                foreach (var dependency in UIPackage.dependencies)
-                {
-                    if (!dependency.TryGetValue("name", out var name))
-                        continue;
-
-                    if (string.IsNullOrEmpty(name))
-                        continue;
-
-                    if (string.Equals(name, PackageName))
-                        continue;
-
-                    m_DependencePackageNames.Add(name);
-                }
             }
 
             public void Reset()
@@ -112,285 +100,63 @@ namespace FairyGUI.Dynamic
                 PackageName = string.Empty;
                 UIPackage = null;
                 ReferenceCount = 0;
+                DependencePackageRefInfos.Clear();
+                BeDependentPackageRefInfos.Clear();
                 m_QueueCallbacks.Clear();
-                m_DependencePackageNames.Clear();
             }
 
             private readonly Queue<Action<UIPackage>> m_QueueCallbacks = new Queue<Action<UIPackage>>();
-            private readonly List<string> m_DependencePackageNames = new List<string>();
         }
 
-        private UIPackageInfo CreatePackageInfo(string packageName, uint version)
+        /// <summary>
+        /// 从对象池中获取UIPackage数据实例
+        /// </summary>
+        private UIPackageInfo GetPackageInfoFromPool(string packageName)
         {
             var info = m_PoolUIPackageInfos.Count > 0 ? m_PoolUIPackageInfos.Dequeue() : new UIPackageInfo();
-            info.Version = version;
+            info.Version = ++m_Version;
             info.PackageName = packageName;
             return info;
         }
 
-        private void ReleasePackageInfo(UIPackageInfo info)
+        /// <summary>
+        /// 回收UIPackage数据实例进对象池
+        /// </summary>
+        private void ReturnPackageInfoToPool(UIPackageInfo info)
         {
             info.Reset();
             m_PoolUIPackageInfos.Enqueue(info);
         }
-        
-        #endregion
 
-        #region [Asset Ref Info]
-
-        private sealed class UIAssetRefInfo
+        private void CheckIfNeedDestroy(UIPackageInfo info)
         {
-            public string PackageName;
-            public uint Version;
-
-            public void Reset()
-            {
-                PackageName = string.Empty;
-                Version = 0;
-            }
-        }
-
-        private UIAssetRefInfo CreateAssetRefInfo(string packageName, uint version)
-        {
-            var info = m_PoolUIAssetRefInfos.Count > 0 ? m_PoolUIAssetRefInfos.Dequeue() : new UIAssetRefInfo();
-            info.PackageName = packageName;
-            info.Version = version;
-            return info;
-        }
-
-        private void ReleaseAssetRefInfo(UIAssetRefInfo info)
-        {
-            info.Reset();
-            m_PoolUIAssetRefInfos.Enqueue(info);
-        }
-
-        #endregion
-
-        private void AddUIPackageInner(string packageName, Action<UIPackage> callback, bool addRef)
-        {
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
-            {
-                info = CreatePackageInfo(packageName, ++m_Version);
-                m_DictUIPackageInfos.Add(packageName, info);
-
-                if (m_AssetLoader == null)
-                    throw new Exception("请设置AssetLoader");
-
-                var version = info.Version;
-
-                m_AssetLoader.LoadUIPackageAsync(packageName, (bytes, prefix) => { OnUIPackageLoadFinished(packageName, version, bytes, prefix); });
-            }
-
-            if (addRef)
-                info.AddRef();
-
-            info.AddCallback(callback);
-        }
-
-        private void ReleaseUIPackageInner(UIPackageInfo info)
-        {
-            info.RemoveRef();
-
             // 判断是否要卸载UIPackage
             if (info.IsAnyReference || !UnloadUnusedUIPackageImmediately)
                 return;
 
-            UnloadUIPackageInner(info);
-        }
-
-        private void UnloadUIPackageInner(UIPackageInfo info)
-        {
-            m_DictUIPackageInfos.Remove(info.PackageName);
-
-            if (info.IsLoadDone)
-            {
-                // 解除对依赖包的引用
-                foreach (var dependencePackageName in info.DependencePackageNames)
-                    ReleaseUIPackage(dependencePackageName);
-
-                if (UIPackage.GetByName(info.PackageName) != null)
-                    UIPackage.RemovePackage(info.PackageName);
-            }
-            else
-            {
-                // 设置加载失败
-                info.SetUIPackage(null);
-            }
-
-            ReleasePackageInfo(info);
-        }
-
-        private void OnUIPackageLoadFinished(string packageName, uint version, byte[] bytes, string assetNamePrefix)
-        {
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
-                return;
-
-            if (info.Version != version)
-                return;
-
-            if (info.IsLoadDone)
-                return;
-
-            var package = bytes != null && bytes.Length > 0 ? UIPackage.AddPackage(bytes, assetNamePrefix, LoadResourceAsync) : null;
-
-            if (package == null)
-            {
-                // 加载失败 卸载对应包
-                UnloadUIPackageInner(info);
-            }
-            else
-            {
-                // 加载成功 设置UIPackage
-                info.SetUIPackage(package);
-
-                // 对依赖的包添加引用
-                foreach (var dependencePackageName in info.DependencePackageNames)
-                    AddUIPackageInner(dependencePackageName, null, true);
-            }
-        }
-
-        private void LoadResourceAsync(string name, string extension, Type type, PackageItem item)
-        {
-            var packageName = item.owner.name;
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
-                return;
-
-            var version = info.Version;
-
-            if (type == typeof(Texture))
-            {
-                if (m_AssetLoader == null)
-                    throw new Exception("请设置AssetLoader");
-
-                // 在加载前添加引用 防止加载过程中UIPackage引用为0被卸载
-                info.AddRef();
-
-                m_AssetLoader.LoadTextureAsync(packageName, name, extension, texture =>
-                {
-                    if (!m_DictUIPackageInfos.TryGetValue(packageName, out var newInfo) || newInfo.Version != version)
-                    {
-                        // 对应UIPackage已经被卸载  直接释放该资源
-                        if (texture != null)
-                            m_AssetLoader.ReleaseTexture(texture);
-
-                        return;
-                    }
-
-                    if (texture == null)
-                    {
-                        // 加载失败 归还引用
-                        ReleaseUIPackageInner(info);
-                        return;
-                    }
-
-                    item.owner.SetItemAsset(item, texture, DestroyMethod.Custom);
-                    item.texture.onRelease -= OnTextureRelease;
-                    item.texture.onRelease += OnTextureRelease;
-                    m_NTextureAssetRefInfos[item.texture.GetHashCode()] = CreateAssetRefInfo(packageName, version);
-                });
-            }
-            else if (type == typeof(AudioClip))
-            {
-                if (m_AssetLoader == null)
-                    throw new Exception("请设置AssetLoader");
-
-                // 在加载前添加引用 防止加载过程中UIPackage引用为0被卸载
-                info.AddRef();
-
-                m_AssetLoader.LoadAudioClipAsync(packageName, name, extension, audioClip =>
-                {
-                    if (!m_DictUIPackageInfos.TryGetValue(packageName, out var newInfo) || newInfo.Version != version)
-                    {
-                        // 对应UIPackage已经被卸载  直接释放该资源
-                        if (audioClip != null)
-                            m_AssetLoader.ReleaseAudioClip(audioClip);
-
-                        return;
-                    }
-
-                    if (audioClip == null)
-                    {
-                        // 加载失败 归还引用
-                        ReleaseUIPackageInner(info);
-                        return;
-                    }
-
-                    item.owner.SetItemAsset(item, audioClip, DestroyMethod.Custom);
-                    item.audioClip.onRelease -= OnAudioClipRelease;
-                    item.audioClip.onRelease += OnAudioClipRelease;
-                    m_NAudioClipAssetRefInfos[item.audioClip.GetHashCode()] = CreateAssetRefInfo(packageName, version);
-                });
-            }
-        }
-
-        private void OnTextureRelease(NTexture nTexture)
-        {
-            nTexture.onRelease -= OnTextureRelease;
-
-            var hashCode = nTexture.GetHashCode();
-            if (!m_NTextureAssetRefInfos.TryGetValue(hashCode, out var assetRefInfo))
-                return;
-
-            m_NTextureAssetRefInfos.Remove(hashCode);
-            
-            if (m_DictUIPackageInfos.TryGetValue(assetRefInfo.PackageName, out var info) && info.Version == assetRefInfo.Version)
-                ReleaseUIPackageInner(info);
-            
-            ReleaseAssetRefInfo(assetRefInfo);
-        }
-
-        private void OnAudioClipRelease(NAudioClip nAudioClip)
-        {
-            nAudioClip.onRelease -= OnAudioClipRelease;
-
-            var hashCode = nAudioClip.GetHashCode();
-            if (!m_NAudioClipAssetRefInfos.TryGetValue(hashCode, out var assetRefInfo))
-                return;
-
-            m_NAudioClipAssetRefInfos.Remove(hashCode);
-            
-            if (m_DictUIPackageInfos.TryGetValue(assetRefInfo.PackageName, out var info) && info.Version == assetRefInfo.Version)
-                ReleaseUIPackageInner(info);
-            
-            ReleaseAssetRefInfo(assetRefInfo);
+            DestroyUIPackageInfo(info.PackageName, info.Version);
         }
 
         private void OnUIPackageAcquire(UIPackage uiPackage, string _)
         {
-            var packageName = uiPackage.name;
-
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
+            var uiPackageInfo = FindUIPackageInfo(uiPackage.name);
+            if (uiPackageInfo == null || uiPackageInfo.UIPackage != uiPackage)
                 return;
 
-            if (info.UIPackage != uiPackage)
-                return;
-
-            info.AddRef();
+            uiPackageInfo.AddRef();
         }
 
         private void OnUIPackageRelease(UIPackage uiPackage, string _)
         {
-            var packageName = uiPackage.name;
-
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
+            var uiPackageInfo = FindUIPackageInfo(uiPackage.name);
+            if (uiPackageInfo == null || uiPackageInfo.UIPackage != uiPackage)
                 return;
 
-            if (info.UIPackage != uiPackage)
-                return;
-
-            ReleaseUIPackageInner(info);
+            uiPackageInfo.RemoveRef();
+            CheckIfNeedDestroy(uiPackageInfo);
         }
 
         private uint m_Version;
-        
-        private readonly Queue<UIAssetRefInfo> m_PoolUIAssetRefInfos = new Queue<UIAssetRefInfo>();
         private readonly Queue<UIPackageInfo> m_PoolUIPackageInfos = new Queue<UIPackageInfo>();
-        private readonly Queue<UIPackageInfo> m_Buffer = new Queue<UIPackageInfo>();
-        private readonly Queue<string> m_Buffer2 = new Queue<string>();
-
-        private readonly Dictionary<string, UIPackageInfo> m_DictUIPackageInfos = new Dictionary<string, UIPackageInfo>();
-
-        private readonly Dictionary<int, UIAssetRefInfo> m_NTextureAssetRefInfos = new Dictionary<int, UIAssetRefInfo>();
-        private readonly Dictionary<int, UIAssetRefInfo> m_NAudioClipAssetRefInfos = new Dictionary<int, UIAssetRefInfo>();
     }
 }

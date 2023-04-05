@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FairyGUI.Dynamic
@@ -18,8 +19,8 @@ namespace FairyGUI.Dynamic
             m_AssetLoader = assetLoader;
             m_UIPackageHelper = uiPackageHelper;
             
-            NTexture.CustomDestroyMethod = CustomDestroyTexture;
-            NAudioClip.CustomDestroyMethod = CustomDestroyAudioClip;
+            NTexture.CustomDestroyMethod = DestroyTexture;
+            NAudioClip.CustomDestroyMethod = DestroyAudioClip;
             UIPackage.OnPackageAcquire += OnUIPackageAcquire;
             UIPackage.OnPackageRelease += OnUIPackageRelease;
             UIPanel.GetPackageFunc = GetPackageFunc;
@@ -32,21 +33,33 @@ namespace FairyGUI.Dynamic
         public void Dispose()
         {
             UnloadAllUIPackages();
-            m_Buffer.Clear();
-            m_Buffer2.Clear();
-            m_Version = 0;
+            
+            foreach (var texture in m_LoadedTextures)
+                m_AssetLoader.ReleaseTexture(texture);
+            m_LoadedTextures.Clear();
+            
+            foreach (var audioClip in m_LoadedAudioClips)
+                m_AssetLoader.ReleaseAudioClip(audioClip);
+            m_LoadedAudioClips.Clear();
+            
             m_NTextureAssetRefInfos.Clear();
             m_NAudioClipAssetRefInfos.Clear();
+            
+            m_StrHashSetBuffer.Clear();
             m_DictUIPackageInfos.Clear();
+            
+            m_Version = 0;
             m_PoolUIPackageInfos.Clear();
-            m_PoolUIAssetRefInfos.Clear();
+            m_PoolUIPackageRefInfos.Clear();
+            
+            m_Buffer.Clear();
             
 #if UNITY_EDITOR
             Debugger.DestroyDebugger();
 #endif
             
-            NTexture.CustomDestroyMethod -= CustomDestroyTexture;
-            NAudioClip.CustomDestroyMethod -= CustomDestroyAudioClip;
+            NTexture.CustomDestroyMethod -= DestroyTexture;
+            NAudioClip.CustomDestroyMethod -= DestroyAudioClip;
             UIPackage.OnPackageAcquire -= OnUIPackageAcquire;
             UIPackage.OnPackageRelease -= OnUIPackageRelease;
             UIPanel.GetPackageFunc -= GetPackageFunc;
@@ -57,7 +70,11 @@ namespace FairyGUI.Dynamic
         /// </summary>
         public void LoadUIPackageAsync(string packageName, Action<UIPackage> callback = null)
         {
-            AddUIPackageInner(packageName, callback, false);
+            var info = FindOrCreateUIPackageInfo(packageName);
+            if (callback == null)
+                return;
+            
+            info.AddCallback(callback);
         }
 
         /// <summary>
@@ -65,7 +82,14 @@ namespace FairyGUI.Dynamic
         /// </summary>
         public void LoadUIPackageAsyncAndAddRef(string packageName, Action<UIPackage> callback = null)
         {
-            AddUIPackageInner(packageName, callback, true);
+            var info = FindOrCreateUIPackageInfo(packageName);
+            
+            info.AddRef();
+            
+            if (callback == null)
+                return;
+            
+            info.AddCallback(callback);
         }
 
         /// <summary>
@@ -79,8 +103,8 @@ namespace FairyGUI.Dynamic
                 callback?.Invoke(null);
                 return;
             }
-            
-            AddUIPackageInner(packageName, callback, false);
+
+            LoadUIPackageAsync(packageName, callback);
         }
 
         /// <summary>
@@ -95,7 +119,7 @@ namespace FairyGUI.Dynamic
                 return;
             }
             
-            AddUIPackageInner(packageName, callback, true);
+            LoadUIPackageAsyncAndAddRef(packageName, callback);
         }
 
         /// <summary>
@@ -103,10 +127,12 @@ namespace FairyGUI.Dynamic
         /// </summary>
         public void ReleaseUIPackage(string packageName)
         {
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
+            var info = FindUIPackageInfo(packageName);
+            if (info == null)
                 return;
             
-            ReleaseUIPackageInner(info);
+            info.RemoveRef();
+            CheckIfNeedDestroy(info);
         }
 
         /// <summary>
@@ -117,11 +143,8 @@ namespace FairyGUI.Dynamic
             var packageName = m_UIPackageHelper.GetPackageNameById(id);
             if (string.IsNullOrEmpty(packageName))
                 return;
-            
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
-                return;
-            
-            ReleaseUIPackageInner(info);
+
+            ReleaseUIPackage(packageName);
         }
         
         /// <summary>
@@ -137,45 +160,35 @@ namespace FairyGUI.Dynamic
                     if (info.IsAnyReference)
                         continue;
                 
-                    m_Buffer.Enqueue(info);
-                    m_Buffer2.Enqueue(key);
+                    m_Buffer.Enqueue(key);
                 }
                 
-                if (m_Buffer2.Count == 0)
+                if (m_Buffer.Count == 0)
                     break;
-            
-                while (m_Buffer2.Count > 0)
-                    m_DictUIPackageInfos.Remove(m_Buffer2.Dequeue());
-            
+
                 while (m_Buffer.Count > 0)
-                    UnloadUIPackageInner(m_Buffer.Dequeue());
+                    DestroyUIPackageInfo(m_Buffer.Dequeue());
             }
         }
         
         /// <summary>
         /// 强制卸载指定的UI包 无视引用次数
         /// </summary>
-        public void UnloadUIPackage(string packageName)
+        public void UnloadUIPackageForce(string packageName)
         {
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
-                return;
-            
-            UnloadUIPackageInner(info);
+            DestroyUIPackageInfo(packageName);
         }
         
         /// <summary>
         /// 通过id强制卸载指定的UI包 无视引用次数
         /// </summary>
-        public void UnloadUIPackageById(string id)
+        public void UnloadUIPackageForceById(string id)
         {
             var packageName = m_UIPackageHelper.GetPackageNameById(id);
             if (string.IsNullOrEmpty(packageName))
                 return;
-            
-            if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
-                return;
-            
-            UnloadUIPackageInner(info);
+
+            UnloadUIPackageForce(packageName);
         }
         
         /// <summary>
@@ -183,34 +196,18 @@ namespace FairyGUI.Dynamic
         /// </summary>
         public void UnloadAllUIPackages()
         {
-            foreach (var info in m_DictUIPackageInfos.Values)
+            foreach (var info in m_DictUIPackageInfos.Keys)
                 m_Buffer.Enqueue(info);
             
-            m_DictUIPackageInfos.Clear();
-            
             while (m_Buffer.Count > 0)
-                UnloadUIPackageInner(m_Buffer.Dequeue());
-        }
-
-        private void CustomDestroyTexture(Texture texture)
-        {
-            if (m_AssetLoader == null)
-                throw new Exception("请设置AssetLoader");
-            
-            m_AssetLoader.ReleaseTexture(texture);
-        }
-
-        private void CustomDestroyAudioClip(AudioClip audioClip)
-        {
-            if (m_AssetLoader == null)
-                throw new Exception("请设置AssetLoader");
-            
-            m_AssetLoader.ReleaseAudioClip(audioClip);
+                DestroyUIPackageInfo(m_Buffer.Dequeue());
         }
 
         private void GetPackageFunc(string packagePath, string packageName, Action<UIPackage> onComplete)
         {
             LoadUIPackageAsync(packageName, onComplete);
         }
+        
+        private readonly Queue<string> m_Buffer = new Queue<string>();
     }
 }
