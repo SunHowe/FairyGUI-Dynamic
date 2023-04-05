@@ -6,6 +6,8 @@ namespace FairyGUI.Dynamic
 {
     public partial class UIAssetManager
     {
+        #region [Package Info]
+
         public sealed class UIPackageInfo
         {
             /// <summary>
@@ -118,14 +120,57 @@ namespace FairyGUI.Dynamic
             private readonly List<string> m_DependencePackageNames = new List<string>();
         }
 
+        private UIPackageInfo CreatePackageInfo(string packageName, uint version)
+        {
+            var info = m_PoolUIPackageInfos.Count > 0 ? m_PoolUIPackageInfos.Dequeue() : new UIPackageInfo();
+            info.Version = version;
+            info.PackageName = packageName;
+            return info;
+        }
+
+        private void ReleasePackageInfo(UIPackageInfo info)
+        {
+            info.Reset();
+            m_PoolUIPackageInfos.Enqueue(info);
+        }
+        
+        #endregion
+
+        #region [Asset Ref Info]
+
+        private sealed class UIAssetRefInfo
+        {
+            public string PackageName;
+            public uint Version;
+
+            public void Reset()
+            {
+                PackageName = string.Empty;
+                Version = 0;
+            }
+        }
+
+        private UIAssetRefInfo CreateAssetRefInfo(string packageName, uint version)
+        {
+            var info = m_PoolUIAssetRefInfos.Count > 0 ? m_PoolUIAssetRefInfos.Dequeue() : new UIAssetRefInfo();
+            info.PackageName = packageName;
+            info.Version = version;
+            return info;
+        }
+
+        private void ReleaseAssetRefInfo(UIAssetRefInfo info)
+        {
+            info.Reset();
+            m_PoolUIAssetRefInfos.Enqueue(info);
+        }
+
+        #endregion
+
         private void AddUIPackageInner(string packageName, Action<UIPackage> callback, bool addRef)
         {
             if (!m_DictUIPackageInfos.TryGetValue(packageName, out var info))
             {
-                info = m_PoolUIPackageInfos.Count > 0 ? m_PoolUIPackageInfos.Dequeue() : new UIPackageInfo();
-                info.Version = ++m_Version;
-                info.PackageName = packageName;
-
+                info = CreatePackageInfo(packageName, ++m_Version);
                 m_DictUIPackageInfos.Add(packageName, info);
 
                 if (m_AssetLoader == null)
@@ -172,8 +217,7 @@ namespace FairyGUI.Dynamic
                 info.SetUIPackage(null);
             }
 
-            info.Reset();
-            m_PoolUIPackageInfos.Enqueue(info);
+            ReleasePackageInfo(info);
         }
 
         private void OnUIPackageLoadFinished(string packageName, uint version, byte[] bytes, string assetNamePrefix)
@@ -218,23 +262,31 @@ namespace FairyGUI.Dynamic
                 if (m_AssetLoader == null)
                     throw new Exception("请设置AssetLoader");
 
+                // 在加载前添加引用 防止加载过程中UIPackage引用为0被卸载
+                info.AddRef();
+
                 m_AssetLoader.LoadTextureAsync(packageName, name, extension, texture =>
                 {
-                    if (texture == null)
-                        return;
-
                     if (!m_DictUIPackageInfos.TryGetValue(packageName, out var newInfo) || newInfo.Version != version)
                     {
-                        // 对应UIPackage已经被卸载 直接释放该资源
-                        m_AssetLoader.ReleaseTexture(texture);
+                        // 对应UIPackage已经被卸载  直接释放该资源
+                        if (texture != null)
+                            m_AssetLoader.ReleaseTexture(texture);
+
                         return;
                     }
 
-                    info.AddRef();
+                    if (texture == null)
+                    {
+                        // 加载失败 归还引用
+                        ReleaseUIPackageInner(info);
+                        return;
+                    }
+
                     item.owner.SetItemAsset(item, texture, DestroyMethod.Custom);
                     item.texture.onRelease -= OnTextureRelease;
                     item.texture.onRelease += OnTextureRelease;
-                    m_NTexture2PackageNames[item.texture.GetHashCode()] = packageName;
+                    m_NTextureAssetRefInfos[item.texture.GetHashCode()] = CreateAssetRefInfo(packageName, version);
                 });
             }
             else if (type == typeof(AudioClip))
@@ -242,23 +294,31 @@ namespace FairyGUI.Dynamic
                 if (m_AssetLoader == null)
                     throw new Exception("请设置AssetLoader");
 
+                // 在加载前添加引用 防止加载过程中UIPackage引用为0被卸载
+                info.AddRef();
+
                 m_AssetLoader.LoadAudioClipAsync(packageName, name, extension, audioClip =>
                 {
-                    if (audioClip == null)
-                        return;
-
                     if (!m_DictUIPackageInfos.TryGetValue(packageName, out var newInfo) || newInfo.Version != version)
                     {
-                        // 对应UIPackage已经被卸载 直接释放该资源
-                        m_AssetLoader.ReleaseAudioClip(audioClip);
+                        // 对应UIPackage已经被卸载  直接释放该资源
+                        if (audioClip != null)
+                            m_AssetLoader.ReleaseAudioClip(audioClip);
+
                         return;
                     }
 
-                    info.AddRef();
+                    if (audioClip == null)
+                    {
+                        // 加载失败 归还引用
+                        ReleaseUIPackageInner(info);
+                        return;
+                    }
+
                     item.owner.SetItemAsset(item, audioClip, DestroyMethod.Custom);
                     item.audioClip.onRelease -= OnAudioClipRelease;
                     item.audioClip.onRelease += OnAudioClipRelease;
-                    m_NAudioClip2PackageNames[item.audioClip.GetHashCode()] = packageName;
+                    m_NAudioClipAssetRefInfos[item.audioClip.GetHashCode()] = CreateAssetRefInfo(packageName, version);
                 });
             }
         }
@@ -268,11 +328,15 @@ namespace FairyGUI.Dynamic
             nTexture.onRelease -= OnTextureRelease;
 
             var hashCode = nTexture.GetHashCode();
-            if (!m_NTexture2PackageNames.TryGetValue(hashCode, out var packageName))
+            if (!m_NTextureAssetRefInfos.TryGetValue(hashCode, out var assetRefInfo))
                 return;
 
-            m_NTexture2PackageNames.Remove(hashCode);
-            ReleaseUIPackage(packageName);
+            m_NTextureAssetRefInfos.Remove(hashCode);
+            
+            if (m_DictUIPackageInfos.TryGetValue(assetRefInfo.PackageName, out var info) && info.Version == assetRefInfo.Version)
+                ReleaseUIPackageInner(info);
+            
+            ReleaseAssetRefInfo(assetRefInfo);
         }
 
         private void OnAudioClipRelease(NAudioClip nAudioClip)
@@ -280,11 +344,15 @@ namespace FairyGUI.Dynamic
             nAudioClip.onRelease -= OnAudioClipRelease;
 
             var hashCode = nAudioClip.GetHashCode();
-            if (!m_NAudioClip2PackageNames.TryGetValue(hashCode, out var packageName))
+            if (!m_NAudioClipAssetRefInfos.TryGetValue(hashCode, out var assetRefInfo))
                 return;
 
-            m_NAudioClip2PackageNames.Remove(hashCode);
-            ReleaseUIPackage(packageName);
+            m_NAudioClipAssetRefInfos.Remove(hashCode);
+            
+            if (m_DictUIPackageInfos.TryGetValue(assetRefInfo.PackageName, out var info) && info.Version == assetRefInfo.Version)
+                ReleaseUIPackageInner(info);
+            
+            ReleaseAssetRefInfo(assetRefInfo);
         }
 
         private void OnUIPackageAcquire(UIPackage uiPackage, string _)
@@ -314,12 +382,15 @@ namespace FairyGUI.Dynamic
         }
 
         private uint m_Version;
+        
+        private readonly Queue<UIAssetRefInfo> m_PoolUIAssetRefInfos = new Queue<UIAssetRefInfo>();
         private readonly Queue<UIPackageInfo> m_PoolUIPackageInfos = new Queue<UIPackageInfo>();
         private readonly Queue<UIPackageInfo> m_Buffer = new Queue<UIPackageInfo>();
         private readonly Queue<string> m_Buffer2 = new Queue<string>();
 
         private readonly Dictionary<string, UIPackageInfo> m_DictUIPackageInfos = new Dictionary<string, UIPackageInfo>();
-        private readonly Dictionary<int, string> m_NTexture2PackageNames = new Dictionary<int, string>();
-        private readonly Dictionary<int, string> m_NAudioClip2PackageNames = new Dictionary<int, string>();
+
+        private readonly Dictionary<int, UIAssetRefInfo> m_NTextureAssetRefInfos = new Dictionary<int, UIAssetRefInfo>();
+        private readonly Dictionary<int, UIAssetRefInfo> m_NAudioClipAssetRefInfos = new Dictionary<int, UIAssetRefInfo>();
     }
 }
