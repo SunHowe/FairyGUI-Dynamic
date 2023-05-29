@@ -2,6 +2,9 @@
 
 namespace FairyGUI.Dynamic
 {
+    /// <summary>
+    /// Resources资源加载器
+    /// </summary>
     public sealed class ResourcesUIAssetLoader : IUIAssetLoader
     {
         private readonly string m_PrefixAssetPath;
@@ -10,8 +13,8 @@ namespace FairyGUI.Dynamic
         {
             m_PrefixAssetPath = mPrefixAssetPath ?? string.Empty;
         }
-
-        public void LoadUIPackageAsync(string packageName, LoadUIPackageCallback callback)
+        
+        public void LoadUIPackageBytesAsync(string packageName, LoadUIPackageBytesCallback callback)
         {
             var assetPath = packageName;
             if (!string.IsNullOrEmpty(m_PrefixAssetPath))
@@ -32,6 +35,26 @@ namespace FairyGUI.Dynamic
             };
         }
 
+        public void LoadUIPackageBytes(string packageName, out byte[] bytes, out string assetNamePrefix)
+        {
+            var assetPath = packageName;
+            if (!string.IsNullOrEmpty(m_PrefixAssetPath))
+                assetPath = m_PrefixAssetPath + "/" + assetPath;
+
+            var asset = Resources.Load<TextAsset>(assetPath + "_fui");
+            if (asset == null)
+            {
+                bytes = null;
+                assetNamePrefix = packageName;
+            }
+            else
+            {
+                bytes = asset.bytes;
+                assetNamePrefix = assetPath;
+                Resources.UnloadAsset(asset);
+            }
+        }
+
         public void LoadTextureAsync(string packageName, string assetName, string extension, LoadTextureCallback callback)
         {
             Resources.LoadAsync<Texture>(assetName).completed += operation =>
@@ -44,7 +67,7 @@ namespace FairyGUI.Dynamic
             };
         }
 
-        public void ReleaseTexture(Texture texture)
+        public void UnloadTexture(Texture texture)
         {
             Resources.UnloadAsset(texture);
         }
@@ -61,7 +84,7 @@ namespace FairyGUI.Dynamic
             };
         }
 
-        public void ReleaseAudioClip(AudioClip audioClip)
+        public void UnloadAudioClip(AudioClip audioClip)
         {
             Resources.UnloadAsset(audioClip);
         }
