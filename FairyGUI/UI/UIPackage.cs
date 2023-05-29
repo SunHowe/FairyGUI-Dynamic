@@ -656,6 +656,28 @@ namespace FairyGUI
             return true;
         }
 
+        public static PackageItem PeekItemByURL(string url)
+        {
+            if (!ParseItemURL(url, out string package, out string item, out bool isName))
+                return null;
+
+            PackageItem pi = null;
+            if (isName)
+            {
+                var pkg = GetByNameDirect(package);
+                if (pkg != null)
+                    pi = pkg.GetItemByName(item);
+            }
+            else
+            {
+                var pkg = GetByIdDirect(package);
+                if (pkg != null)
+                    pi = pkg.GetItem(item);
+            }
+
+            return pi;
+        }
+
         public static PackageItem GetItemByURL(string url)
         {
             if (!ParseItemURL(url, out string package, out string item, out bool isName))
