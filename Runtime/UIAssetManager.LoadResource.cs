@@ -11,7 +11,11 @@ namespace FairyGUI.Dynamic
             var packageName = item.owner.name;
             var packageRef = FindUIPackageRef(packageName);
             if (packageRef == null)
+            {
+                // 触发加载失败
+                item.owner.SetItemAsset(item, null, DestroyMethod.None);
                 return;
+            }
 
             if (m_AssetLoader == null)
                 throw new Exception("请设置AssetLoader");
@@ -35,6 +39,7 @@ namespace FairyGUI.Dynamic
                     {
                         // 加载失败 归还引用
                         packageRef.RemoveRef();
+                        item.owner.SetItemAsset(item, null, DestroyMethod.None);
                         return;
                     }
 
@@ -63,6 +68,7 @@ namespace FairyGUI.Dynamic
                     {
                         // 加载失败 归还引用
                         packageRef.RemoveRef();
+                        item.owner.SetItemAsset(item, null, DestroyMethod.None);
                         return;
                     }
 
