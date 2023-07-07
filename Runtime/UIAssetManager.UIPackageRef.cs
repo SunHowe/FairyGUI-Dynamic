@@ -58,6 +58,36 @@ namespace FairyGUI.Dynamic
             packageRef.RemoveRef();
         }
 
+        private void AfterCreateObject(PackageItem item, List<AsyncCreationHelper.DisplayListItem> itemlist)
+        {
+            foreach (var displayListItem in itemlist)
+            {
+                if (displayListItem.packageItem == null)
+                    continue;
+                
+                var packageRef = FindUIPackageRef(displayListItem.packageItem.owner.name);
+                if (packageRef == null || packageRef.UIPackage != displayListItem.packageItem.owner)
+                    continue;
+                
+                packageRef.RemoveRef();
+            }
+        }
+
+        private void BeforeCreateObject(PackageItem item, List<AsyncCreationHelper.DisplayListItem> itemlist)
+        {
+            foreach (var displayListItem in itemlist)
+            {
+                if (displayListItem.packageItem == null)
+                    continue;
+                
+                var packageRef = FindUIPackageRef(displayListItem.packageItem.owner.name);
+                if (packageRef == null || packageRef.UIPackage != displayListItem.packageItem.owner)
+                    continue;
+                
+                packageRef.AddRef();
+            }
+        }
+
         private void OnUIPackageRefZero(UIPackageRef packageRef)
         {
             if (!m_UnloadUnusedUIPackageImmediately)

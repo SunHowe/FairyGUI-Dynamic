@@ -27,6 +27,8 @@ namespace FairyGUI.Dynamic
             UIPackage.RemoveAllPackagesHandler = UnloadAllUIPackages;
             UIPackage.RemoveUnusedPackagesHandler = UnloadUnusedUIPackages;
             UIPanel.GetPackageFunc = GetPackageFunc;
+            AsyncCreationHelper.BeforeCreateObject += BeforeCreateObject;
+            AsyncCreationHelper.AfterCreateObject += AfterCreateObject;
 
 #if UNITY_EDITOR
             Debugger.CreateDebugger(this);
@@ -66,6 +68,8 @@ namespace FairyGUI.Dynamic
             UIPackage.RemoveAllPackagesHandler -= UnloadAllUIPackages;
             UIPackage.RemoveUnusedPackagesHandler -= UnloadUnusedUIPackages;
             UIPanel.GetPackageFunc -= GetPackageFunc;
+            AsyncCreationHelper.BeforeCreateObject -= BeforeCreateObject;
+            AsyncCreationHelper.AfterCreateObject -= AfterCreateObject;
         }
 
         private UIPackage GetUIPackageByNameFunc(string name)
