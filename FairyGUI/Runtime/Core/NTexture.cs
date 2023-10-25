@@ -58,9 +58,19 @@ namespace FairyGUI
         public event Action<NTexture> onSizeChanged;
 
         /// <summary>
+        /// This event will trigger when ref count is not zero.
+        /// </summary>
+        public event Action<NTexture> onAcquire; 
+
+        /// <summary>
         /// This event will trigger when ref count is zero.
         /// </summary>
         public event Action<NTexture> onRelease;
+        
+        /// <summary>
+        /// This event will trigger when texture is disposing.
+        /// </summary>
+        public event Action<NTexture> onDispose;
 
         Texture _nativeTexture;
         Texture _alphaTexture;
@@ -484,6 +494,12 @@ namespace FairyGUI
                 _root.AddRef();
 
             refCount++;
+
+            if (refCount == 1)
+            {
+                if (onAcquire != null)
+                    onAcquire(this);
+            }
         }
 
         public void ReleaseRef()
@@ -510,12 +526,17 @@ namespace FairyGUI
         {
             if (this == _empty)
                 return;
+            
+            if (onDispose != null)
+                onDispose(this);
 
             if (_root == this)
                 Unload(true);
             _root = null;
             onSizeChanged = null;
+            onAcquire = null;
             onRelease = null;
+            onDispose = null;
         }
     }
 }

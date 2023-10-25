@@ -26,9 +26,19 @@ namespace FairyGUI
         public int refCount;
 
         /// <summary>
+        /// This event will trigger when ref count is not zero.
+        /// </summary>
+        public event Action<NAudioClip> onAcquire; 
+
+        /// <summary>
         /// This event will trigger when ref count is zero.
         /// </summary>
         public event Action<NAudioClip> onRelease;
+        
+        /// <summary>
+        /// This event will trigger when texture is disposing.
+        /// </summary>
+        public event Action<NAudioClip> onDispose;
 
         /// <summary>
         /// 
@@ -77,6 +87,9 @@ namespace FairyGUI
         public void AddRef()
         {
             refCount++;
+            
+            if (refCount == 1)
+                onAcquire?.Invoke(this);
         }
 
         public void ReleaseRef()
@@ -87,6 +100,17 @@ namespace FairyGUI
                 return;
 
             onRelease?.Invoke(this);
+        }
+
+        public void Dispose()
+        {
+            onDispose?.Invoke(this);
+            
+            Unload();
+            
+            onAcquire = null;
+            onRelease = null;
+            onDispose = null;
         }
     }
 }

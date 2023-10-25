@@ -49,7 +49,17 @@ namespace FairyGUI.Dynamic
                     item.owner.SetItemAsset(item, asset, DestroyMethod.Custom);
                     item.texture.onRelease -= OnTextureRelease;
                     item.texture.onRelease += OnTextureRelease;
+                    item.texture.onAcquire -= OnTextureAcquire;
+                    item.texture.onAcquire += OnTextureAcquire;
+                    item.texture.onDispose -= OnTextureDispose;
+                    item.texture.onDispose += OnTextureDispose;
                     m_NTextureAssetRefInfos[item.texture.GetHashCode()] = packageRef;
+
+                    if (item.texture.refCount == 0)
+                    {
+                        // 如果加载完成后引用为0 则归还引用
+                        packageRef.RemoveRef();
+                    }
                 });
             }
             else if (type == typeof(AudioClip))
@@ -76,9 +86,19 @@ namespace FairyGUI.Dynamic
                     m_LoadedAudioClips.Add(asset);
 
                     item.owner.SetItemAsset(item, asset, DestroyMethod.Custom);
+                    item.audioClip.onAcquire -= OnAudioClipAcquire;
+                    item.audioClip.onAcquire += OnAudioClipAcquire;
                     item.audioClip.onRelease -= OnAudioClipRelease;
                     item.audioClip.onRelease += OnAudioClipRelease;
+                    item.audioClip.onDispose -= OnAudioClipDispose;
+                    item.audioClip.onDispose += OnAudioClipDispose;
                     m_NAudioClipAssetRefInfos[item.audioClip.GetHashCode()] = packageRef;
+                    
+                    if (item.audioClip.refCount == 0)
+                    {
+                        // 如果加载完成后引用为0 则归还引用
+                        packageRef.RemoveRef();
+                    }
                 });
             }
             else
@@ -88,10 +108,40 @@ namespace FairyGUI.Dynamic
             }
         }
 
+        private void OnTextureAcquire(NTexture nTexture)
+        {
+            var hashCode = nTexture.GetHashCode();
+            if (!m_NTextureAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+                return;
+
+            var packageRef = FindUIPackageRef(refInfo.Name);
+            if (packageRef != refInfo)
+                return;
+            
+            // 新增引用
+            packageRef.AddRef();
+        }
+
         private void OnTextureRelease(NTexture nTexture)
         {
-            nTexture.onRelease -= OnTextureRelease;
+            var hashCode = nTexture.GetHashCode();
+            if (!m_NTextureAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+                return;
 
+            var packageRef = FindUIPackageRef(refInfo.Name);
+            if (packageRef != refInfo)
+                return;
+
+            // 归还引用
+            packageRef.RemoveRef();
+        }
+
+        private void OnTextureDispose(NTexture nTexture)
+        {
+            nTexture.onRelease -= OnTextureRelease;
+            nTexture.onAcquire -= OnTextureAcquire;
+            nTexture.onDispose -= OnTextureDispose;
+            
             var hashCode = nTexture.GetHashCode();
             if (!m_NTextureAssetRefInfos.TryGetValue(hashCode, out var refInfo))
                 return;
@@ -102,14 +152,47 @@ namespace FairyGUI.Dynamic
             if (packageRef != refInfo)
                 return;
 
-            // 归还引用
-            packageRef.RemoveRef();
+            if (nTexture.refCount > 0)
+            {
+                // 归还引用
+                packageRef.RemoveRef();
+            }
+        }
+
+        private void OnAudioClipAcquire(NAudioClip nAudioClip)
+        {
+            var hashCode = nAudioClip.GetHashCode();
+            if (!m_NAudioClipAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+                return;
+
+            var packageRef = FindUIPackageRef(refInfo.Name);
+            if (packageRef != refInfo)
+                return;
+            
+            // 新增引用
+            packageRef.AddRef();
         }
 
         private void OnAudioClipRelease(NAudioClip nAudioClip)
         {
-            nAudioClip.onRelease -= OnAudioClipRelease;
+            var hashCode = nAudioClip.GetHashCode();
+            if (!m_NAudioClipAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+                return;
 
+            var packageRef = FindUIPackageRef(refInfo.Name);
+            if (packageRef != refInfo)
+                return;
+
+            // 归还引用
+            packageRef.RemoveRef();
+        }
+
+        private void OnAudioClipDispose(NAudioClip nAudioClip)
+        {
+            nAudioClip.onAcquire -= OnAudioClipAcquire;
+            nAudioClip.onRelease -= OnAudioClipRelease;
+            nAudioClip.onDispose -= OnAudioClipDispose;
+            
             var hashCode = nAudioClip.GetHashCode();
             if (!m_NAudioClipAssetRefInfos.TryGetValue(hashCode, out var refInfo))
                 return;
@@ -120,8 +203,11 @@ namespace FairyGUI.Dynamic
             if (packageRef != refInfo)
                 return;
 
-            // 归还引用
-            packageRef.RemoveRef();
+            if (nAudioClip.refCount > 0)
+            {
+                // 归还引用
+                packageRef.RemoveRef();
+            }
         }
 
         private readonly Dictionary<int, UIPackageRef> m_NTextureAssetRefInfos = new Dictionary<int, UIPackageRef>();
