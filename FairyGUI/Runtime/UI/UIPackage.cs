@@ -482,6 +482,17 @@ namespace FairyGUI
         }
 
         /// <summary>
+        /// 卸载未使用的资源
+        /// </summary>
+        public static void UnloadAllUnusedAssets()
+        {
+            foreach (var package in _packageList)
+            {
+                package.UnloadUnusedAssets();
+            }
+        }
+
+        /// <summary>
         /// 
         /// </summary>
         /// <returns></returns>
@@ -1097,6 +1108,36 @@ namespace FairyGUI
         }
 
         /// <summary>
+        /// 卸载包内未使用的资源
+        /// </summary>
+        public void UnloadUnusedAssets()
+        {
+            int cnt = _items.Count;
+            for (int i = 0; i < cnt; i++)
+            {
+                PackageItem pi = _items[i];
+                switch (pi.type)
+                {
+                    case PackageItemType.Atlas:
+                    case PackageItemType.Image:
+                        if (pi.texture != null && pi.texture.refCount == 0)
+                        {
+                            pi.texture.Dispose();
+                            pi.texture = null;
+                        }
+                        break;
+                    case PackageItemType.Sound:
+                        if (pi.audioClip != null && pi.audioClip.refCount == 0)
+                        {
+                            pi.audioClip.Dispose();
+                            pi.audioClip = null;
+                        }
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
         /// 
         /// </summary>
         public void UnloadAssets()
@@ -1179,7 +1220,7 @@ namespace FairyGUI
                 {
                     if (pi.audioClip != null)
                     {
-                        pi.audioClip.Unload();
+                        pi.audioClip.Dispose();
                         pi.audioClip = null;
                     }
                 }
