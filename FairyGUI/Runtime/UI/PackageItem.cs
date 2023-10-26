@@ -32,10 +32,7 @@ namespace FairyGUI
         public PixelHitTestData pixelHitTestData;
 
         //movieclip
-        public float interval;
-        public float repeatDelay;
-        public bool swing;
-        public MovieClip.Frame[] frames;
+        public MovieClipItem movieClipItem;
 
         //component
         public bool translated;

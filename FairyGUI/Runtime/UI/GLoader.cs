@@ -412,10 +412,7 @@ namespace FairyGUI
                 }
                 else if (_contentItem.type == PackageItemType.MovieClip)
                 {
-                    _content.interval = _contentItem.interval;
-                    _content.swing = _contentItem.swing;
-                    _content.repeatDelay = _contentItem.repeatDelay;
-                    _content.frames = _contentItem.frames;
+                    _content.movieClipItem = _contentItem.movieClipItem;
 
                     UpdateLayout();
                 }
@@ -650,7 +647,7 @@ namespace FairyGUI
                 }
                 _content.texture = null;
             }
-            _content.frames = null;
+            _content.movieClipItem = null;
 
             if (_content2 != null)
             {

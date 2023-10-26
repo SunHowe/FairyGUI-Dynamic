@@ -166,10 +166,7 @@ namespace FairyGUI
             contentItem = contentItem.getHighResolution();
             contentItem.Load();
 
-            _content.interval = contentItem.interval;
-            _content.swing = contentItem.swing;
-            _content.repeatDelay = contentItem.repeatDelay;
-            _content.frames = contentItem.frames;
+            _content.movieClipItem = contentItem.movieClipItem;
 
             SetSize(sourceWidth, sourceHeight);
         }

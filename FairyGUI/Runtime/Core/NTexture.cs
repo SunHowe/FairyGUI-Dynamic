@@ -40,7 +40,7 @@ namespace FairyGUI
         /// <summary>
         /// 
         /// </summary>
-        public int refCount;
+        public int refCount { get; private set; }
 
         /// <summary>
         /// 
@@ -505,6 +505,9 @@ namespace FairyGUI
         public void ReleaseRef()
         {
             if (_root == null) //disposed
+                return;
+            
+            if (refCount == 0)
                 return;
 
             refCount--;

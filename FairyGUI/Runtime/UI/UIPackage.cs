@@ -1112,10 +1112,24 @@ namespace FairyGUI
         /// </summary>
         public void UnloadUnusedAssets()
         {
-            int cnt = _items.Count;
-            for (int i = 0; i < cnt; i++)
+            var cnt = _items.Count;
+            var existsUnloadAssetRefOthers = false;
+
+            do
             {
-                PackageItem pi = _items[i];
+                existsUnloadAssetRefOthers = false;
+                
+                for (int i = 0; i < cnt; i++)
+                {
+                    if (UnloadAsset(_items[i]))
+                        existsUnloadAssetRefOthers = true;
+                }
+                
+                // 如果存在依赖其他资源的资源被卸载了，那么就再次尝试卸载
+            } while (existsUnloadAssetRefOthers);
+            
+            bool UnloadAsset(PackageItem pi)
+            {
                 switch (pi.type)
                 {
                     case PackageItemType.Atlas:
@@ -1124,6 +1138,7 @@ namespace FairyGUI
                         {
                             pi.texture.Dispose();
                             pi.texture = null;
+                            return pi.type == PackageItemType.Image;
                         }
                         break;
                     case PackageItemType.Sound:
@@ -1133,7 +1148,17 @@ namespace FairyGUI
                             pi.audioClip = null;
                         }
                         break;
+                    case PackageItemType.MovieClip:
+                        if (pi.movieClipItem != null && pi.movieClipItem.refCount == 0)
+                        {
+                            pi.movieClipItem.Dispose();
+                            pi.movieClipItem = null;
+                            return true;
+                        }
+                        break;
                 }
+
+                return false;
             }
         }
 
@@ -1367,10 +1392,10 @@ namespace FairyGUI
                     return item.bitmapFont;
 
                 case PackageItemType.MovieClip:
-                    if (item.frames == null)
+                    if (item.movieClipItem == null)
                         LoadMovieClip(item);
 
-                    return item.frames;
+                    return item.movieClipItem;
 
                 case PackageItemType.Component:
                     return item.rawData;
@@ -1606,14 +1631,14 @@ namespace FairyGUI
 
             buffer.Seek(0, 0);
 
-            item.interval = buffer.ReadInt() / 1000f;
-            item.swing = buffer.ReadBool();
-            item.repeatDelay = buffer.ReadInt() / 1000f;
+            var interval = buffer.ReadInt() / 1000f;
+            var swing = buffer.ReadBool();
+            var repeatDelay = buffer.ReadInt() / 1000f;
 
             buffer.Seek(0, 1);
 
             int frameCount = buffer.ReadShort();
-            item.frames = new MovieClip.Frame[frameCount];
+            var frames = new MovieClip.Frame[frameCount];
 
             string spriteId;
             MovieClip.Frame frame;
@@ -1638,10 +1663,13 @@ namespace FairyGUI
                     frame.texture = new NTexture((NTexture)GetItemAsset(sprite.atlas), sprite.rect, sprite.rotated,
                         new Vector2(item.width, item.height), frameRect.position);
                 }
-                item.frames[i] = frame;
+
+                frames[i] = frame;
 
                 buffer.position = nextPos;
             }
+            
+            item.movieClipItem = new MovieClipItem(interval, repeatDelay, swing, frames);
         }
 
         void LoadFont(PackageItem item)

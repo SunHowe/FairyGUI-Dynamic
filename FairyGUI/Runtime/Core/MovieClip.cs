@@ -57,6 +57,7 @@ namespace FairyGUI
         TimerCallback _timerDelegate;
 
         EventListener _onPlayEnd;
+        MovieClipItem _movieClipItem;
 
         /// <summary>
         /// 
@@ -89,13 +90,38 @@ namespace FairyGUI
         /// <summary>
         /// 
         /// </summary>
+        public MovieClipItem movieClipItem
+        {
+            get => _movieClipItem;
+            set
+            {
+                _movieClipItem?.ReleaseRef();
+                _movieClipItem = value;
+
+                if (_movieClipItem == null)
+                {
+                    frames = null;
+                    return;
+                }
+                
+                frames = _movieClipItem.frames;
+                interval = _movieClipItem.interval;
+                swing = _movieClipItem.swing;
+                repeatDelay = _movieClipItem.repeatDelay;
+                frames = _movieClipItem.frames;
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
         public Frame[] frames
         {
             get
             {
                 return _frames;
             }
-            set
+            private set
             {
                 _frames = value;
                 _scale9Grid = null;
@@ -409,6 +435,12 @@ namespace FairyGUI
                 Frame frame = _frames[_frame];
                 graphics.texture = frame.texture;
             }
+        }
+
+        public override void Dispose()
+        {
+            movieClipItem = null;
+            base.Dispose();
         }
     }
 }
