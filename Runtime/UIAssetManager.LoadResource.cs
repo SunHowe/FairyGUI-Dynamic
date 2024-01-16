@@ -53,7 +53,7 @@ namespace FairyGUI.Dynamic
                     item.texture.onAcquire += OnTextureAcquire;
                     item.texture.onDispose -= OnTextureDispose;
                     item.texture.onDispose += OnTextureDispose;
-                    m_NTextureAssetRefInfos[item.texture.GetHashCode()] = packageRef;
+                    m_NTextureAssetRefInfos[item.texture.instanceID] = packageRef;
 
                     if (item.texture.refCount == 0)
                     {
@@ -92,8 +92,8 @@ namespace FairyGUI.Dynamic
                     item.audioClip.onRelease += OnAudioClipRelease;
                     item.audioClip.onDispose -= OnAudioClipDispose;
                     item.audioClip.onDispose += OnAudioClipDispose;
-                    m_NAudioClipAssetRefInfos[item.audioClip.GetHashCode()] = packageRef;
-                    
+                    m_NAudioClipAssetRefInfos[item.audioClip.instanceID] = packageRef;
+
                     if (item.audioClip.refCount == 0)
                     {
                         // 如果加载完成后引用为0 则归还引用
@@ -110,8 +110,7 @@ namespace FairyGUI.Dynamic
 
         private void OnTextureAcquire(NTexture nTexture)
         {
-            var hashCode = nTexture.GetHashCode();
-            if (!m_NTextureAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+            if (!m_NTextureAssetRefInfos.TryGetValue(nTexture.instanceID, out var refInfo))
                 return;
 
             var packageRef = FindUIPackageRef(refInfo.Name);
@@ -124,8 +123,7 @@ namespace FairyGUI.Dynamic
 
         private void OnTextureRelease(NTexture nTexture)
         {
-            var hashCode = nTexture.GetHashCode();
-            if (!m_NTextureAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+            if (!m_NTextureAssetRefInfos.TryGetValue(nTexture.instanceID, out var refInfo))
                 return;
 
             var packageRef = FindUIPackageRef(refInfo.Name);
@@ -141,12 +139,11 @@ namespace FairyGUI.Dynamic
             nTexture.onRelease -= OnTextureRelease;
             nTexture.onAcquire -= OnTextureAcquire;
             nTexture.onDispose -= OnTextureDispose;
-            
-            var hashCode = nTexture.GetHashCode();
-            if (!m_NTextureAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+
+            if (!m_NTextureAssetRefInfos.TryGetValue(nTexture.instanceID, out var refInfo))
                 return;
 
-            m_NTextureAssetRefInfos.Remove(hashCode);
+            m_NTextureAssetRefInfos.Remove(nTexture.instanceID);
 
             var packageRef = FindUIPackageRef(refInfo.Name);
             if (packageRef != refInfo)
@@ -161,8 +158,7 @@ namespace FairyGUI.Dynamic
 
         private void OnAudioClipAcquire(NAudioClip nAudioClip)
         {
-            var hashCode = nAudioClip.GetHashCode();
-            if (!m_NAudioClipAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+            if (!m_NAudioClipAssetRefInfos.TryGetValue(nAudioClip.instanceID, out var refInfo))
                 return;
 
             var packageRef = FindUIPackageRef(refInfo.Name);
@@ -175,8 +171,7 @@ namespace FairyGUI.Dynamic
 
         private void OnAudioClipRelease(NAudioClip nAudioClip)
         {
-            var hashCode = nAudioClip.GetHashCode();
-            if (!m_NAudioClipAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+            if (!m_NAudioClipAssetRefInfos.TryGetValue(nAudioClip.instanceID, out var refInfo))
                 return;
 
             var packageRef = FindUIPackageRef(refInfo.Name);
@@ -192,12 +187,11 @@ namespace FairyGUI.Dynamic
             nAudioClip.onAcquire -= OnAudioClipAcquire;
             nAudioClip.onRelease -= OnAudioClipRelease;
             nAudioClip.onDispose -= OnAudioClipDispose;
-            
-            var hashCode = nAudioClip.GetHashCode();
-            if (!m_NAudioClipAssetRefInfos.TryGetValue(hashCode, out var refInfo))
+
+            if (!m_NAudioClipAssetRefInfos.TryGetValue(nAudioClip.instanceID, out var refInfo))
                 return;
 
-            m_NAudioClipAssetRefInfos.Remove(hashCode);
+            m_NAudioClipAssetRefInfos.Remove(nAudioClip.instanceID);
 
             var packageRef = FindUIPackageRef(refInfo.Name);
             if (packageRef != refInfo)

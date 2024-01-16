@@ -39,6 +39,13 @@ namespace FairyGUI
         /// This event will trigger when texture is disposing.
         /// </summary>
         public event Action<NAudioClip> onDispose;
+        
+        /// <summary>
+        /// NAudioClip instance id.
+        /// </summary>
+        public int instanceID { get; private set; }
+        
+        private static int _instanceIDIncrease = 0;
 
         /// <summary>
         /// 
@@ -47,6 +54,7 @@ namespace FairyGUI
         public NAudioClip(AudioClip audioClip)
         {
             nativeClip = audioClip;
+            instanceID = ++_instanceIDIncrease;
         }
 
         /// <summary>
