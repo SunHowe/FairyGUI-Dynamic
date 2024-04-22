@@ -1,8 +1,6 @@
 ﻿using UnityEngine;
-#if UNITY_5_3_OR_NEWER
-using UnityEditor.SceneManagement;
-#endif
 using UnityEditor;
+using UnityEditor.SceneManagement;
 
 namespace FairyGUIEditor
 {
@@ -75,13 +73,7 @@ namespace FairyGUIEditor
 #endif
                 panel.SendMessage("OnUpdateSource", new object[] { null, null, null, !isPrefab });
 
-#if UNITY_5_3_OR_NEWER
                 EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-#elif UNITY_5
-                EditorApplication.MarkSceneDirty();
-#else
-                EditorUtility.SetDirty(panel);
-#endif
             }
             EditorGUILayout.EndHorizontal();
 
@@ -143,7 +135,9 @@ namespace FairyGUIEditor
 
             Vector3 pos = panel.GetUIWorldPosition();
             float sizeFactor = HandleUtility.GetHandleSize(pos);
-#if UNITY_2017_1_OR_NEWER
+#if UNITY_2022_2_OR_NEWER
+            Vector3 newPos = Handles.FreeMoveHandle(pos, sizeFactor, Vector3.one, Handles.ArrowHandleCap);
+#elif UNITY_2017_1_OR_NEWER
             Vector3 newPos = Handles.FreeMoveHandle(pos, Quaternion.identity, sizeFactor, Vector3.one, Handles.ArrowHandleCap);
 #else
             Vector3 newPos = Handles.FreeMoveHandle(pos, Quaternion.identity, sizeFactor, Vector3.one, Handles.ArrowCap);

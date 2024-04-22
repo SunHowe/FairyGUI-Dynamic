@@ -1,10 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using UnityEngine;
-using FairyGUI.Utils;
-
-#if UNITY_5_3_OR_NEWER
+using System.Collections.Generic;
 using UnityEngine.SceneManagement;
+
+#if FAIRYGUI_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.EnhancedTouch;
+using TouchPhase = UnityEngine.InputSystem.TouchPhase;
+using Touch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 #endif
 
 namespace FairyGUI
@@ -31,7 +34,6 @@ namespace FairyGUI
         DisplayObject _touchTarget;
         DisplayObject _focused;
         InputTextField _lastInput;
-        bool _IMEComposite;
         UpdateContext _updateContext;
         List<DisplayObject> _rollOutChain;
         List<DisplayObject> _rollOverChain;
@@ -59,10 +61,11 @@ namespace FairyGUI
         string _currentCursor;
 
         static bool _touchScreen;
+        static bool _keyboardInput;
+        static bool _touchSupportDetected;
         internal static int _clickTestThreshold;
-#pragma warning disable 0649
         static IKeyboard _keyboard;
-#pragma warning restore 0649
+        static bool _keyboardOpened;
 
         static Stage _inst;
         /// <summary>
@@ -78,6 +81,20 @@ namespace FairyGUI
                 return _inst;
             }
         }
+
+#if UNITY_2019_3_OR_NEWER
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void InitializeOnLoad()
+        {
+            if (_inst != null)
+            {
+                _inst.Dispose();
+                _inst = null;
+            }
+
+            _touchSupportDetected = false;
+        }
+#endif
 
         /// <summary>
         /// 
@@ -109,16 +126,16 @@ namespace FairyGUI
                 if (_touchScreen)
                 {
 #if !(UNITY_WEBPLAYER || UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX || UNITY_EDITOR)
-                    _keyboard = new FairyGUI.TouchScreenKeyboard();
                     keyboardInput = true;
 #endif
                     _clickTestThreshold = 50;
+                    _touchSupportDetected = true;
                 }
                 else
                 {
-                    _keyboard = null;
                     keyboardInput = false;
-                    Stage.inst.ResetInputState();
+                    _keyboardOpened = false;
+                    inst.ResetInputState();
                     _clickTestThreshold = 10;
                 }
             }
@@ -131,7 +148,26 @@ namespace FairyGUI
         /// </summary>
         public static bool keyboardInput
         {
-            get; set;
+            get { return _keyboardInput; }
+            set
+            {
+                _keyboardInput = value;
+                if (value && _keyboard == null)
+                {
+#if !(UNITY_WEBPLAYER || UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX || UNITY_EDITOR)
+                    _keyboard = new TouchScreenKeyboard();
+#endif
+                }
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public static IKeyboard keyboard
+        {
+            get { return _keyboard; }
+            set { _keyboard = value; }
         }
 
         /// <summary>
@@ -157,10 +193,17 @@ namespace FairyGUI
         }
 
         /// <summary>
+        /// The scale of the mouse scroll delta.
+        /// </summary>
+        public static float mouseWheelScale
+        {
+            get; set;
+        }
+
+        /// <summary>
         /// 
         /// </summary>
-        public Stage()
-            : base()
+        public Stage() : base()
         {
             _inst = this;
             soundVolume = 1;
@@ -172,16 +215,31 @@ namespace FairyGUI
             for (int i = 0; i < _touches.Length; i++)
                 _touches[i] = new TouchInfo();
 
+#if FAIRYGUI_INPUT_SYSTEM
+            if (Touchscreen.current != null && !EnhancedTouchSupport.enabled)
+                EnhancedTouchSupport.Enable();
+#endif
+
             bool isOSX = Application.platform == RuntimePlatform.OSXPlayer
                 || Application.platform == RuntimePlatform.OSXEditor;
+
             if (Application.platform == RuntimePlatform.WindowsPlayer
                 || Application.platform == RuntimePlatform.WindowsEditor
+                || Application.platform == RuntimePlatform.WebGLPlayer
                 || isOSX)
                 touchScreen = false;
             else
-                touchScreen = Input.touchSupported && SystemInfo.deviceType != DeviceType.Desktop;
-            //在PC上，是否retina屏对输入法位置，鼠标滚轮速度都有影响，但现在没发现Unity有获得的方式。仅判断是否Mac可能不够（外接显示器的情况）。所以最好自行设置。
+            {
+#if FAIRYGUI_INPUT_SYSTEM
+                touchScreen = Touchscreen.current != null;
+#else
+                touchScreen = Input.touchSupported;
+#endif
+            }
+
+            // 在PC上，是否retina屏对输入法位置，鼠标滚轮速度都有影响，但现在没发现Unity有获得的方式。仅判断是否Mac可能不够（外接显示器的情况）。所以最好自行设置。
             devicePixelRatio = (isOSX && Screen.dpi > 96) ? 2 : 1;
+            mouseWheelScale = 1;
 
             _rollOutChain = new List<DisplayObject>();
             _rollOverChain = new List<DisplayObject>();
@@ -191,44 +249,50 @@ namespace FairyGUI
             _cursors = new Dictionary<string, CursorDef>();
 
             SetSize(Screen.width, Screen.height);
-            this.cachedTransform.localScale = new Vector3(StageCamera.DefaultUnitsPerPixel, StageCamera.DefaultUnitsPerPixel, StageCamera.DefaultUnitsPerPixel);
+            cachedTransform.localScale = new Vector3(StageCamera.DefaultUnitsPerPixel, StageCamera.DefaultUnitsPerPixel, StageCamera.DefaultUnitsPerPixel);
 
+#if UNITY_2022_2_OR_NEWER
+            StageEngine engine = GameObject.FindFirstObjectByType<StageEngine>();
+#else
             StageEngine engine = GameObject.FindObjectOfType<StageEngine>();
+#endif
             if (engine != null)
                 UnityEngine.Object.Destroy(engine.gameObject);
 
-            this.gameObject.name = "Stage";
-            this.gameObject.layer = LayerMask.NameToLayer(StageCamera.LayerName);
-            this.gameObject.AddComponent<StageEngine>();
-            this.gameObject.AddComponent<UIContentScaler>();
-            this.gameObject.SetActive(true);
-            UnityEngine.Object.DontDestroyOnLoad(this.gameObject);
+            gameObject.name = "Stage";
+            gameObject.layer = LayerMask.NameToLayer(StageCamera.LayerName);
+            gameObject.AddComponent<StageEngine>();
+            gameObject.AddComponent<UIContentScaler>();
+            gameObject.SetActive(true);
+            UnityEngine.Object.DontDestroyOnLoad(gameObject);
 
             EnableSound();
 
             Timers.inst.Add(5, 0, RunTextureCollector);
 
-#if UNITY_5_4_OR_NEWER
             SceneManager.sceneLoaded += SceneManager_sceneLoaded;
+
+#if FAIRYGUI_INPUT_SYSTEM
+            InputTextField.RegisterEvent();
 #endif
         }
 
-#if UNITY_5_4_OR_NEWER
         void SceneManager_sceneLoaded(Scene scene, LoadSceneMode mode)
         {
             StageCamera.CheckMainCamera();
         }
-#endif
 
         public override void Dispose()
         {
             base.Dispose();
 
+#if FAIRYGUI_INPUT_SYSTEM
+            InputTextField.UnregisterEvent();
+#endif
+
             Timers.inst.Remove(RunTextureCollector);
 
-#if UNITY_5_4_OR_NEWER
             SceneManager.sceneLoaded -= SceneManager_sceneLoaded;
-#endif
         }
 
         /// <summary>
@@ -628,14 +692,6 @@ namespace FairyGUI
                 _audio.PlayOneShot(clip, this.soundVolume);
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        public IKeyboard keyboard
-        {
-            get { return _keyboard; }
-            set { _keyboard = value; }
-        }
 
         /// <summary>
         /// 
@@ -654,6 +710,7 @@ namespace FairyGUI
             if (_keyboard != null)
             {
                 _keyboard.Open(text, autocorrection, multiline, secure, alert, textPlaceholder, keyboardType, hideInput);
+                _keyboardOpened = true;
             }
         }
 
@@ -801,18 +858,27 @@ namespace FairyGUI
             else if (touchScreen)
             {
                 _touchTarget = null;
+
+#if FAIRYGUI_INPUT_SYSTEM
+                foreach (Touch uTouch in Touch.activeTouches)
+                {
+                    Vector2 pos = uTouch.screenPosition;
+                    int touchId = uTouch.touchId;
+#else
                 for (int i = 0; i < Input.touchCount; ++i)
                 {
                     Touch uTouch = Input.GetTouch(i);
-
                     Vector2 pos = uTouch.position;
+                    int touchId = uTouch.fingerId;
+#endif
+
                     pos.y = _contentRect.height - pos.y;
 
                     TouchInfo touch = null;
                     TouchInfo free = null;
                     for (int j = 0; j < 5; j++)
                     {
-                        if (_touches[j].touchId == uTouch.fingerId)
+                        if (_touches[j].touchId == touchId)
                         {
                             touch = _touches[j];
                             break;
@@ -827,7 +893,7 @@ namespace FairyGUI
                         if (touch == null || uTouch.phase != TouchPhase.Began)
                             continue;
 
-                        touch.touchId = uTouch.fingerId;
+                        touch.touchId = touchId;
                     }
 
                     if (uTouch.phase == TouchPhase.Stationary)
@@ -841,10 +907,17 @@ namespace FairyGUI
             }
             else
             {
-                Vector2 pos = Input.mousePosition;
+                Vector2 pos = Vector2.zero;
+#if FAIRYGUI_INPUT_SYSTEM
+                Mouse mouse = Mouse.current;
+                if (mouse != null)
+                    pos = mouse.position.ReadValue();
+#else
+                pos = Input.mousePosition;
+#endif
                 pos.y = Screen.height - pos.y;
                 TouchInfo touch = _touches[0];
-                if (pos.x < 0 || pos.y < 0) //outside of the window
+                if (pos.x < 0 || pos.y < 0) // outside of the window
                     _touchTarget = this;
                 else
                     _touchTarget = HitTest(pos, true);
@@ -871,13 +944,8 @@ namespace FairyGUI
         {
             if (evt.rawType == EventType.KeyDown)
             {
-                if (_IMEComposite && Input.compositionString.Length == 0)
-                {
-                    _IMEComposite = false;
-                    //eat one key on IME closing
-                    if (evt.keyCode != KeyCode.None)
-                        return;
-                }
+                if (InputTextField.EatKeyEvent(evt))
+                    return;
 
                 TouchInfo touch = _touches[0];
                 touch.keyCode = evt.keyCode;
@@ -893,6 +961,9 @@ namespace FairyGUI
             }
             else if (evt.rawType == EventType.KeyUp)
             {
+                if (InputTextField.EatKeyEvent(evt))
+                    return;
+
                 TouchInfo touch = _touches[0];
                 touch.keyCode = evt.keyCode;
                 touch.modifiers = evt.modifiers;
@@ -914,7 +985,7 @@ namespace FairyGUI
                 if (_touchTarget != null)
                 {
                     TouchInfo touch = _touches[0];
-                    touch.mouseWheelDelta = evt.delta.y;
+                    touch.mouseWheelDelta = evt.delta.y * Stage.mouseWheelScale;
                     touch.UpdateEvent();
                     _touchTarget.BubbleEvent("onMouseWheel", touch.evt);
                     touch.mouseWheelDelta = 0;
@@ -933,13 +1004,31 @@ namespace FairyGUI
                 HandleCustomInput();
                 _customInput = false;
             }
-            else if (touchScreen)
-                HandleTouchEvents();
             else
-                HandleMouseEvents();
+            {
+                if (!_touchSupportDetected)
+                {
+                    if (Application.platform == RuntimePlatform.WebGLPlayer)
+                    {
+#if FAIRYGUI_INPUT_SYSTEM
+                        if (Touch.activeTouches.Count > 0)
+                            touchScreen = true;
+#else
+                        if (Input.touchCount > 0)
+                            touchScreen = true;
+#endif
+                    }
+                    else
+                        _touchSupportDetected = true;
+                }
+                if (touchScreen)
+                    HandleTouchEvents();
+                else
+                    HandleMouseEvents();
+            }
 
-            if (_focused is InputTextField)
-                HandleTextInput();
+            if (_keyboardOpened)
+                HandleKeyboardInput();
         }
 
         void UpdateTouchPosition()
@@ -954,17 +1043,31 @@ namespace FairyGUI
                 }
                 else if (touchScreen)
                 {
-                    for (int i = 0; i < Input.touchCount; ++i)
+#if FAIRYGUI_INPUT_SYSTEM
+                    if (Touch.activeTouches.Count > 0)
                     {
-                        Touch uTouch = Input.GetTouch(i);
-                        _touchPosition = uTouch.position;
+                        _touchPosition = Touch.activeTouches[Touch.activeTouches.Count - 1].screenPosition;
                         _touchPosition.y = _contentRect.height - _touchPosition.y;
                     }
+#else
+                    if (Input.touchCount > 0)
+                    {
+                        _touchPosition = Input.GetTouch(Input.touchCount - 1).position;
+                        _touchPosition.y = _contentRect.height - _touchPosition.y;
+                    }
+#endif
                 }
                 else
                 {
-                    Vector2 pos = Input.mousePosition;
-                    if (pos.x >= 0 && pos.y >= 0) //编辑器环境下坐标有时是负
+                    Vector2 pos = Vector2.zero;
+#if FAIRYGUI_INPUT_SYSTEM
+                    Mouse mouse = Mouse.current;
+                    if (mouse != null)
+                        pos = mouse.position.ReadValue();
+#else
+                    pos = Input.mousePosition;
+#endif
+                    if (pos.x >= 0 && pos.y >= 0) // 编辑器环境下坐标有时是负
                     {
                         pos.y = _contentRect.height - pos.y;
                         _touchPosition = pos;
@@ -973,33 +1076,26 @@ namespace FairyGUI
             }
         }
 
-        void HandleTextInput()
+        void HandleKeyboardInput()
         {
-            _IMEComposite = Input.compositionString.Length > 0;
-
-            InputTextField textField = (InputTextField)_focused;
-            if (!textField.editable)
-                return;
-
-            if (keyboardInput)
+            string s = _keyboard.GetInput();
+            if (s != null)
             {
-                if (textField.keyboardInput && _keyboard != null)
+                InputTextField textField = _focused as InputTextField;
+                if (textField != null)
                 {
-                    string s = _keyboard.GetInput();
-                    if (s != null)
-                    {
-                        if (_keyboard.supportsCaret)
-                            textField.ReplaceSelection(s);
-                        else
-                            textField.ReplaceText(s);
-                    }
-
-                    if (_keyboard.done)
-                        SetFocus(null);
+                    if (_keyboard.supportsCaret)
+                        textField.ReplaceSelection(s);
+                    else
+                        textField.ReplaceText(s);
                 }
             }
-            else
-                textField.CheckComposition();
+
+            if (_keyboard.done)
+            {
+                SetFocus(null);
+                _keyboardOpened = false;
+            }
         }
 
         void HandleCustomInput()
@@ -1061,20 +1157,37 @@ namespace FairyGUI
             if (touch.lastRollOver != touch.target)
                 HandleRollOver(touch);
 
+#if FAIRYGUI_INPUT_SYSTEM
+            Mouse mouse = Mouse.current;
+            if (mouse == null)
+                return;
+
+            if (mouse.leftButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame || mouse.middleButton.wasPressedThisFrame)
+#else
             if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1) || Input.GetMouseButtonDown(2))
+#endif
             {
                 if (!touch.began)
                 {
                     _touchCount = 1;
                     touch.Begin();
+#if FAIRYGUI_INPUT_SYSTEM
+                    touch.button = mouse.middleButton.wasPressedThisFrame ? 2 : (mouse.rightButton.wasPressedThisFrame ? 1 : 0);
+#else
                     touch.button = Input.GetMouseButtonDown(2) ? 2 : (Input.GetMouseButtonDown(1) ? 1 : 0);
+#endif
                     SetFocus(touch.target);
 
                     touch.UpdateEvent();
                     touch.target.BubbleEvent("onTouchBegin", touch.evt);
                 }
             }
+
+#if FAIRYGUI_INPUT_SYSTEM
+            if (mouse.leftButton.wasReleasedThisFrame || mouse.rightButton.wasReleasedThisFrame || mouse.middleButton.wasReleasedThisFrame)
+#else
             if (Input.GetMouseButtonUp(0) || Input.GetMouseButtonUp(1) || Input.GetMouseButtonUp(2))
+#endif
             {
                 if (touch.began)
                 {
@@ -1086,7 +1199,11 @@ namespace FairyGUI
                     {
                         touch.UpdateEvent();
 
+#if FAIRYGUI_INPUT_SYSTEM
+                        if (mouse.rightButton.wasReleasedThisFrame || mouse.middleButton.wasReleasedThisFrame)
+#else
                         if (Input.GetMouseButtonUp(1) || Input.GetMouseButtonUp(2))
+#endif
                             clickTarget.BubbleEvent("onRightClick", touch.evt);
                         else
                             clickTarget.BubbleEvent("onClick", touch.evt);
@@ -1096,28 +1213,44 @@ namespace FairyGUI
                 }
             }
 
-            //We have to do this, coz the cursor will auto change back after a click or dragging
+            // We have to do this, coz the cursor will auto change back after a click or dragging
+#if FAIRYGUI_INPUT_SYSTEM
+            if (mouse.leftButton.wasReleasedThisFrame && _currentCursor != null)
+#else
             if (Input.GetMouseButtonUp(0) && _currentCursor != null)
+#endif
                 _ChangeCursor(_currentCursor);
         }
 
         void HandleTouchEvents()
         {
-            int tc = Input.touchCount;
-            for (int i = 0; i < tc; ++i)
+#if FAIRYGUI_INPUT_SYSTEM
+            foreach (Touch uTouch in Touch.activeTouches)
+            {
+#else
+            for (int i = 0; i < Input.touchCount; i++)
             {
                 Touch uTouch = Input.GetTouch(i);
+#endif
 
                 if (uTouch.phase == TouchPhase.Stationary)
                     continue;
 
+#if FAIRYGUI_INPUT_SYSTEM
+                Vector2 pos = uTouch.screenPosition;
+#else
                 Vector2 pos = uTouch.position;
+#endif
                 pos.y = _contentRect.height - pos.y;
 
                 TouchInfo touch = null;
                 for (int j = 0; j < 5; j++)
                 {
+#if FAIRYGUI_INPUT_SYSTEM
+                    if (_touches[j].touchId == uTouch.touchId)
+#else
                     if (_touches[j].touchId == uTouch.fingerId)
+#endif
                     {
                         touch = _touches[j];
                         break;

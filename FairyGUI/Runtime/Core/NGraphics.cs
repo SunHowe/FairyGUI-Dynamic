@@ -9,7 +9,7 @@ namespace FairyGUI
     /// <summary>
     /// 
     /// </summary>
-    public class NGraphics : IMeshFactory
+    public class NGraphics : IMeshFactory, IBatchable
     {
         /// <summary>
         /// 
@@ -46,6 +46,16 @@ namespace FairyGUI
         /// </summary>
         public event Action meshModifier;
 
+        /// <summary>
+        /// 
+        /// </summary>
+        public List<NGraphics> subInstances;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public Vector4 userData;
+
         NTexture _texture;
         string _shader;
         Material _material;
@@ -74,12 +84,10 @@ namespace FairyGUI
         internal int _maskFlag;
         StencilEraser _stencilEraser;
 
-#if !UNITY_5_6_OR_NEWER
-        Color32[] _colors;
-#endif
-
         MaterialPropertyBlock _propertyBlock;
         bool _blockUpdated;
+
+        internal BatchElement _batchElement;
 
         /// <summary>
         /// 
@@ -154,6 +162,12 @@ namespace FairyGUI
             {
                 _contentRect = value;
                 _meshDirty = true;
+
+                if (subInstances != null)
+                {
+                    foreach (var sub in subInstances)
+                        sub.contentRect = value;
+                }
             }
         }
 
@@ -351,10 +365,33 @@ namespace FairyGUI
         /// <summary>
         /// 
         /// </summary>
+        [Obsolete("Use renderingOrder")]
         public int sortingOrder
         {
             get { return meshRenderer.sortingOrder; }
             set { meshRenderer.sortingOrder = value; }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public int renderingOrder
+        {
+            get { return meshRenderer.sortingOrder; }
+            set { meshRenderer.sortingOrder = value; }
+        }
+
+        public void SetRenderingOrder(UpdateContext context, bool inBatch)
+        {
+            meshRenderer.sortingOrder = context.renderingOrder++;
+
+            if (subInstances != null && !inBatch)
+            {
+                foreach (var sub in subInstances)
+                {
+                    sub.meshRenderer.sortingOrder = context.renderingOrder++;
+                }
+            }
         }
 
         /// <summary>
@@ -388,15 +425,9 @@ namespace FairyGUI
             if (vertCount == 0)
                 return;
 
-#if !UNITY_5_6_OR_NEWER
-            Color32[] colors = _colors;
-            if (colors == null)
-                colors = mesh.colors32;
-#else
             VertexBuffer vb = VertexBuffer.Begin();
             mesh.GetColors(vb.colors);
             List<Color32> colors = vb.colors;
-#endif
             for (int i = 0; i < vertCount; i++)
             {
                 Color32 col = _color;
@@ -404,12 +435,8 @@ namespace FairyGUI
                 colors[i] = col;
             }
 
-#if !UNITY_5_6_OR_NEWER
-            mesh.colors32 = colors;
-#else
             mesh.SetColors(vb.colors);
             vb.End();
-#endif
         }
 
         void ChangeAlpha(float value)
@@ -420,15 +447,9 @@ namespace FairyGUI
             if (vertCount == 0)
                 return;
 
-#if !UNITY_5_6_OR_NEWER
-            Color32[] colors = _colors;
-            if (colors == null)
-                colors = mesh.colors32;
-#else
             VertexBuffer vb = VertexBuffer.Begin();
             mesh.GetColors(vb.colors);
             List<Color32> colors = vb.colors;
-#endif
             for (int i = 0; i < vertCount; i++)
             {
                 Color32 col = colors[i];
@@ -436,12 +457,8 @@ namespace FairyGUI
                 colors[i] = col;
             }
 
-#if !UNITY_5_6_OR_NEWER
-            mesh.colors32 = colors;
-#else
             mesh.SetColors(vb.colors);
             vb.End();
-#endif
         }
 
         /// <summary>
@@ -479,6 +496,12 @@ namespace FairyGUI
         public void SetMeshDirty()
         {
             _meshDirty = true;
+
+            if (subInstances != null)
+            {
+                foreach (var g in subInstances)
+                    g._meshDirty = true;
+            }
         }
 
         /// <summary>
@@ -487,13 +510,23 @@ namespace FairyGUI
         /// <returns></returns>
         public bool UpdateMesh()
         {
+            bool ret = false;
             if (_meshDirty)
             {
                 UpdateMeshNow();
-                return true;
+                ret = true;
             }
-            else
-                return false;
+
+            if (subInstances != null)
+            {
+                foreach (var g in subInstances)
+                {
+                    if (g.UpdateMesh())
+                        ret = true;
+                }
+            }
+
+            return ret;
         }
 
         /// <summary>
@@ -524,6 +557,13 @@ namespace FairyGUI
             meshFilter = null;
             _stencilEraser = null;
             meshModifier = null;
+
+            if (subInstances != null)
+            {
+                foreach (var sub in subInstances)
+                    sub.Dispose();
+                subInstances.Clear();
+            }
         }
 
         /// <summary>
@@ -608,6 +648,12 @@ namespace FairyGUI
 
                     _maskFlag = 0;
                 }
+            }
+
+            if (subInstances != null)
+            {
+                foreach (var sub in subInstances)
+                    sub.Update(context, alpha, grayed);
             }
         }
 
@@ -756,8 +802,6 @@ namespace FairyGUI
             }
 
             mesh.Clear();
-
-#if UNITY_5_2 || UNITY_5_3_OR_NEWER
             mesh.SetVertices(vb.vertices);
             if (vb._isArbitraryQuad)
                 mesh.SetUVs(0, vb.FixUVForArbitraryQuad());
@@ -767,33 +811,6 @@ namespace FairyGUI
             mesh.SetTriangles(vb.triangles, 0);
             if (vb.uvs2.Count == vb.uvs.Count)
                 mesh.SetUVs(1, vb.uvs2);
-
-#if !UNITY_5_6_OR_NEWER
-            _colors = null;
-#endif
-#else
-            Vector3[] vertices = new Vector3[vertCount];
-            Vector2[] uv = new Vector2[vertCount];
-            _colors = new Color32[vertCount];
-            int[] triangles = new int[vb.triangles.Count];
-
-            vb.vertices.CopyTo(vertices);
-            vb.uvs.CopyTo(uv);
-            vb.colors.CopyTo(_colors);
-            vb.triangles.CopyTo(triangles);
-
-            mesh.vertices = vertices;
-            mesh.uv = uv;
-            mesh.triangles = triangles;
-            mesh.colors32 = _colors;
-
-            if(vb.uvs2.Count==uv.Length)
-            {
-                uv = new Vector2[vertCount];
-                vb.uvs2.CopyTo(uv);
-                mesh.uv2 = uv;
-            }
-#endif
             vb.End();
 
             if (meshModifier != null)
@@ -802,11 +819,23 @@ namespace FairyGUI
 
         public void OnPopulateMesh(VertexBuffer vb)
         {
-            Rect rect = texture.GetDrawRect(vb.contentRect);
+            Rect rect = texture.GetDrawRect(vb.contentRect, flip);
 
             vb.AddQuad(rect, vb.vertexColor, vb.uvRect);
             vb.AddTriangles();
             vb._isArbitraryQuad = _vertexMatrix != null;
+        }
+
+        public NGraphics CreateSubInstance(string name)
+        {
+            if (subInstances == null)
+                subInstances = new List<NGraphics>();
+
+            GameObject newGameObject = new GameObject(name);
+            newGameObject.transform.SetParent(gameObject.transform, false);
+            newGameObject.layer = gameObject.layer;
+            newGameObject.hideFlags = gameObject.hideFlags;
+            return new NGraphics(newGameObject);
         }
 
         class StencilEraser

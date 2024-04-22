@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using FairyGUI.Utils;
 
@@ -452,7 +453,7 @@ namespace FairyGUI
         /// Set the object in middle of the parent or GRoot if the parent is not set.
         /// </summary>
         /// <param name="restraint">Add relations to maintain the center state.</param>
-        public void Center(bool restraint)
+        public virtual void Center(bool restraint)
         {
             GComponent r;
             if (parent != null)
@@ -1483,6 +1484,14 @@ namespace FairyGUI
         public bool dragging
         {
             get { return draggingObject == this; }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public Vector2 dragStartPos
+        {
+            get { return _dragTouchStartPos; }
         }
 
         /// <summary>
