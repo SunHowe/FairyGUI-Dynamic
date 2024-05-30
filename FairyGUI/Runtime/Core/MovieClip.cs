@@ -19,6 +19,15 @@ namespace FairyGUI
         /// <summary>
         /// 
         /// </summary>
+        public FlipType flip
+        {
+            get => graphics.flip;
+            set => graphics.flip = value;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
         public float interval;
 
         /// <summary>
