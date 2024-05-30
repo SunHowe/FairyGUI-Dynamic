@@ -191,6 +191,17 @@ namespace FairyGUI
             camera.orthographicSize = DefaultCameraSize;
             camera.nearClipPlane = -30;
             camera.farClipPlane = 30;
+
+#if USE_URP_CAMERA
+            // 将 FariyGUI 像机添加到主像机Stack(URP调整)
+            var cameraData = camera.GetUniversalAdditionalCameraData();
+            if (cameraData != null)
+            {
+                cameraData.renderType = CameraRenderType.Overlay;
+                var mainCameraData = Camera.main.GetUniversalAdditionalCameraData();
+                mainCameraData?.cameraStack.Add(camera);
+            }
+#endif
             camera.stereoTargetEye = StereoTargetEyeMask.None;
             camera.allowHDR = false;
             camera.allowMSAA = false;
