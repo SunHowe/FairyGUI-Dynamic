@@ -15,6 +15,11 @@ namespace FairyGUI
         /// 
         /// </summary>
         public float blurSize;
+        
+        /// <summary>
+        /// 降采样等级 右移位数
+        /// </summary>
+        public int downSample = 3;
 
         DisplayObject _target;
         Material _blitMaterial;
@@ -82,8 +87,15 @@ namespace FairyGUI
                 return;
 
             RenderTexture sourceTexture = (RenderTexture)_target.paintingGraphics.texture.nativeTexture;
-            int rtW = sourceTexture.width / 8;
-            int rtH = sourceTexture.height / 8;
+            int rtW = sourceTexture.width;
+            int rtH = sourceTexture.height;
+
+            if (downSample > 0)
+            {
+                rtW >>= downSample;
+                rtH >>= downSample;
+            }
+            
             RenderTexture buffer = RenderTexture.GetTemporary(rtW, rtH, 0);
 
             DownSample4x(sourceTexture, buffer);
