@@ -26,6 +26,10 @@ namespace FairyGUI
         /// 当手指按下后一段时间后派发该事件。并且在手指离开前按一定周期派发该事件。
         /// </summary>
         public EventListener onAction { get; private set; }
+        /// <summary>
+        /// 当手指离开屏幕时，若未触发过onAction，且符合点击响应逻辑，则派发该事件。
+        /// </summary>
+        public EventListener onClick { get; private set; }
 
         /// <summary>
         /// 第一次派发事件的触发时间。单位秒
@@ -50,6 +54,7 @@ namespace FairyGUI
         Vector2 _startPoint;
         bool _started;
         int _touchId;
+        bool _invoked;
 
         public static float TRIGGER = 1.5f;
         public static float INTERVAL = 1f;
@@ -65,6 +70,7 @@ namespace FairyGUI
             onBegin = new EventListener(this, "onLongPressBegin");
             onEnd = new EventListener(this, "onLongPressEnd");
             onAction = new EventListener(this, "onLongPressAction");
+            onClick = new EventListener(this, "onClick");
         }
 
         public void Dispose()
@@ -81,11 +87,13 @@ namespace FairyGUI
                 {
                     Stage.inst.onTouchBegin.Add(__touchBegin);
                     Stage.inst.onTouchEnd.Add(__touchEnd);
+                    Stage.inst.onClick.Add(__click);
                 }
                 else
                 {
                     host.onTouchBegin.Add(__touchBegin);
                     host.onTouchEnd.Add(__touchEnd);
+                    host.onClick.Add(__click);
                 }
             }
             else
@@ -94,11 +102,13 @@ namespace FairyGUI
                 {
                     Stage.inst.onTouchBegin.Remove(__touchBegin);
                     Stage.inst.onTouchEnd.Remove(__touchEnd);
+                    Stage.inst.onClick.Remove(__click);
                 }
                 else
                 {
                     host.onTouchBegin.Remove(__touchBegin);
                     host.onTouchEnd.Remove(__touchEnd);
+                    host.onClick.Remove(__click);
                 }
                 Timers.inst.Remove(__timer);
             }
@@ -115,6 +125,7 @@ namespace FairyGUI
             InputEvent evt = context.inputEvent;
             _startPoint = host.GlobalToLocal(new Vector2(evt.x, evt.y));
             _started = false;
+            _invoked = false;
             _touchId = evt.touchId;
 
             Timers.inst.Add(trigger, 1, __timer);
@@ -132,6 +143,7 @@ namespace FairyGUI
             if (!_started)
             {
                 _started = true;
+                _invoked = true;
                 onBegin.Call();
 
                 if (!once)
@@ -150,6 +162,14 @@ namespace FairyGUI
                 _started = false;
                 onEnd.Call();
             }
+        }
+
+        void __click()
+        {
+            if (_invoked)
+                return;
+
+            onClick.Call();
         }
     }
 }
