@@ -1,6 +1,10 @@
 ﻿using System;
 using UnityEngine;
 
+#if USE_URP_CAMERA
+using UnityEngine.Rendering.Universal;
+#endif
+
 namespace FairyGUI
 {
     /// <summary>
