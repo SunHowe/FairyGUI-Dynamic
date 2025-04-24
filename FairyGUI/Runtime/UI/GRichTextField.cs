@@ -30,9 +30,7 @@ namespace FairyGUI
 
         override protected void SetTextFieldText()
         {
-            string str = _text;
-            if (_templateVars != null)
-                str = ParseTemplate(str);
+            string str = ParseTemplate(_text);
 
             _textField.maxWidth = maxWidth;
             if (_ubbEnabled)

@@ -6,10 +6,23 @@ using FairyGUI.Utils;
 namespace FairyGUI
 {
     /// <summary>
+    /// 获取模板文本的委托
+    /// </summary>
+    /// <param name="template">模板</param>
+    /// <param name="templateVars">模板变量(可能为null)</param>
+    /// <returns>模板文本</returns>
+    public delegate string GetTemplateTextDelegate(string template, Dictionary<string, string> templateVars);
+
+    /// <summary>
     /// 
     /// </summary>
     public class GTextField : GObject, ITextColorGear
     {
+        /// <summary>
+        /// 获取模板文本的委托
+        /// </summary>
+        public static GetTemplateTextDelegate GetTemplateText;
+
         protected TextField _textField;
         protected string _text;
         protected bool _ubbEnabled;
@@ -63,9 +76,7 @@ namespace FairyGUI
 
         virtual protected void SetTextFieldText()
         {
-            string str = _text;
-            if (_templateVars != null)
-                str = ParseTemplate(str);
+            string str = ParseTemplate(_text);
 
             _textField.maxWidth = maxWidth;
             if (_ubbEnabled)
@@ -125,6 +136,17 @@ namespace FairyGUI
 
         protected string ParseTemplate(string template)
         {
+            if (GetTemplateText != null)
+            {
+                // 若有设置全局获取模板文本的委托，则使用委托获取模板文本
+                return GetTemplateText(template, _templateVars);
+            }
+
+            if (_templateVars == null)
+            {
+                return template;
+            }
+
             int pos1 = 0, pos2 = 0;
             int pos3;
             string tag;
