@@ -1,6 +1,6 @@
 {
     "name": "com.howegame.fariygui.dynamic",
-    "version": "1.0.0",
+    "version": "5.2.1",
     "displayName": "FairyGUI-Dynamic",
     "description": "Unity package for FairyGUI-Dynamic. It provides a manager of FairyGUI UIPackage.",
     "category": "Runtime",
