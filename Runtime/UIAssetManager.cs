@@ -55,6 +55,14 @@ namespace FairyGUI.Dynamic
             foreach (var audioClip in m_LoadedAudioClips)
                 m_AssetLoader.UnloadAudioClip(audioClip);
             m_LoadedAudioClips.Clear();
+            
+#if FAIRYGUI_SPINE
+            foreach (var spine in m_LoadedSpines)
+            {
+                m_AssetLoader.UnloadSpine(spine); 
+            }
+            m_LoadedSpines.Clear();
+#endif
 
             m_NTextureAssetRefInfos.Clear();
             m_NAudioClipAssetRefInfos.Clear();
@@ -198,6 +206,10 @@ namespace FairyGUI.Dynamic
 
         private readonly List<Texture> m_LoadedTextures = new List<Texture>();
         private readonly List<AudioClip> m_LoadedAudioClips = new List<AudioClip>();
+        
+#if FAIRYGUI_SPINE
+        private readonly List<Spine.Unity.SkeletonDataAsset> m_LoadedSpines = new List<Spine.Unity.SkeletonDataAsset>();
+#endif
 
         private readonly HashSet<string> m_RemoveBuffer = new HashSet<string>();
     }

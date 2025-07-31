@@ -19,6 +19,12 @@ namespace FairyGUI.Dynamic
         public delegate void LoadAudioClipAsyncHandler(string packageName, string assetName, string extension, LoadAudioClipCallback callback);
 
         public delegate void UnloadAudioClipHandler(AudioClip audioClip);
+        
+#if FAIRYGUI_SPINE
+        public delegate void LoadSpineAsyncHandler(string packageName, string assetName, string extension, LoadSpineCallback callback);
+
+        public delegate void UnloadSpineHandler(Spine.Unity.SkeletonDataAsset skeletonDataAsset);
+#endif
 
         public LoadUIPackageBytesAsyncHandler LoadUIPackageBytesAsyncHandlerImpl { get; set; }
         public LoadUIPackageBytesHandler LoadUIPackageBytesHandlerImpl { get; set; }
@@ -26,6 +32,12 @@ namespace FairyGUI.Dynamic
         public UnloadTextureHandler UnloadTextureHandlerImpl { get; set; }
         public LoadAudioClipAsyncHandler LoadAudioClipAsyncHandlerImpl { get; set; }
         public UnloadAudioClipHandler UnloadAudioClipHandlerImpl { get; set; }
+        
+#if FAIRYGUI_SPINE
+        public LoadSpineAsyncHandler LoadSpineAsyncHandlerImpl { get; set; }
+
+        public UnloadSpineHandler UnloadSpineHandlerImpl { get; set; }
+#endif
 
         public void LoadUIPackageBytesAsync(string packageName, LoadUIPackageBytesCallback callback)
         {
@@ -71,5 +83,28 @@ namespace FairyGUI.Dynamic
 
             UnloadAudioClipHandlerImpl(audioClip);
         }
+        
+#if FAIRYGUI_SPINE
+        public void LoadSpineAsync(string packageName, string assetName, string extension, LoadSpineCallback callback)
+        {
+            if (LoadSpineAsyncHandlerImpl == null)
+            {
+                throw new NotImplementedException();
+            }
+            
+            LoadSpineAsyncHandlerImpl(packageName, assetName, extension, callback);
+        }
+
+        public void UnloadSpine(Spine.Unity.SkeletonDataAsset skeletonDataAsset)
+        {
+            if (UnloadSpineHandlerImpl == null)
+            {
+                throw new NotImplementedException();
+            }
+            
+            UnloadSpineHandlerImpl(skeletonDataAsset);
+        }
+#endif
+        
     }
 }
