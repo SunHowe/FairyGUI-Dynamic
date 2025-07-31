@@ -28,5 +28,22 @@ namespace FairyGUI.Dynamic
             m_LoadedAudioClips.Remove(audioClip);
             m_AssetLoader.UnloadAudioClip(audioClip);
         }
+        
+#if FAIRYGUI_SPINE
+        private void DestroySpine(Spine.Unity.SkeletonDataAsset asset)
+        {
+            if (asset == null)
+            {
+                return;
+            }
+            
+            if (m_AssetLoader == null)
+                throw new Exception("请设置AssetLoader");
+            
+            m_LoadedSpines.Remove(asset);
+            m_AssetLoader.UnloadSpine(asset);
+        }
+#endif
+        
     }
 }

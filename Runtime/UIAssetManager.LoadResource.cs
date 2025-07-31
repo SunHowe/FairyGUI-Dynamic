@@ -101,6 +101,29 @@ namespace FairyGUI.Dynamic
                     }
                 });
             }
+#if FAIRYGUI_SPINE
+            else if (type == typeof(Spine.Unity.SkeletonDataAsset))
+            {
+                m_AssetLoader.LoadSpineAsync(packageName, name, extension, asset =>
+                {
+                    var newPackageRef = FindUIPackageRef(packageName);
+                    if (newPackageRef != packageRef)
+                    {
+                        DestroySpine(asset);
+                        return;
+                    }
+                    if (asset == null)
+                    {
+                        packageRef.RemoveRef();
+                        item.owner.SetItemAsset(item, null, DestroyMethod.None);
+                        return;
+                    }
+                    m_LoadedSpines.Add(asset);
+                    item.owner.SetItemAsset(item, asset, DestroyMethod.Custom);
+                    packageRef.RemoveRef();
+                });
+            }
+#endif
             else
             {
                 // 暂不支持的类型 归还引用

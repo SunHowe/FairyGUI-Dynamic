@@ -16,6 +16,13 @@ namespace FairyGUI.Dynamic
     /// AudioClip资源加载回调
     /// </summary>
     public delegate void LoadAudioClipCallback(AudioClip audioClip);
+    
+#if FAIRYGUI_SPINE
+    /// <summary>
+    /// Spine资源加载回调
+    /// </summary>
+    public delegate void LoadSpineCallback(Spine.Unity.SkeletonDataAsset skeletonDataAsset);
+#endif
 
     /// <summary>
     /// UI资源加载器接口 由外部实现接口后传给管理器进行使用
@@ -51,5 +58,18 @@ namespace FairyGUI.Dynamic
         /// 卸载AudioCip资源
         /// </summary>
         void UnloadAudioClip(AudioClip audioClip);
+        
+#if FAIRYGUI_SPINE
+        /// <summary>
+        /// 异步加载Spine资源
+        /// </summary>
+        void LoadSpineAsync(string packageName, string assetName, string extension, LoadSpineCallback callback);
+
+        /// <summary>
+        /// 卸载Spine资源
+        /// </summary>
+        void UnloadSpine(Spine.Unity.SkeletonDataAsset skeletonDataAsset);
+#endif
+        
     }
 }

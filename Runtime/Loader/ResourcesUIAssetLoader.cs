@@ -88,5 +88,30 @@ namespace FairyGUI.Dynamic
         {
             Resources.UnloadAsset(audioClip);
         }
+        
+#if FAIRYGUI_SPINE
+        public void LoadSpineAsync(string packageName, string assetName, string extension, LoadSpineCallback callback)
+        {
+            var spineAssetName = assetName + "_SkeletonData";
+            Resources.LoadAsync<Spine.Unity.SkeletonDataAsset>(spineAssetName).completed += operation =>
+            {
+                var request = (ResourceRequest)operation;
+                if (request.asset == null)
+                {
+                    callback(null);
+                }
+                else
+                {
+                    callback((Spine.Unity.SkeletonDataAsset)request.asset);
+                }
+            };
+        }
+
+        public void UnloadSpine(Spine.Unity.SkeletonDataAsset skeletonDataAsset)
+        {
+            Resources.UnloadAsset(skeletonDataAsset);
+        }
+#endif
+        
     }
 }
