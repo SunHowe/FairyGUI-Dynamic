@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace FairyGUI.Dynamic
 {
+    [CreateAssetMenu(fileName = "UIPackageMapping", menuName = "FairyGUI/UIPackageMapping")]
     public sealed class UIPackageMapping : ScriptableObject, IUIPackageHelper
     {
         public string[] PackageIds;
